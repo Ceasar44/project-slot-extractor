@@ -22,16 +22,17 @@ from scripts.eval.phase05_artifacts import (
 )
 from scripts.eval.phase05_metrics import WorkloadSample, aggregate_workload
 from scripts.eval.phase05_reports import render_phase05_reports
-from slot_extractor.evaluation.runner import default_scorers
-from slot_extractor.evaluation.scenarios import aggregate_scenario_slices
-from slot_extractor.evaluation.scorecard import aggregate_scorecard
+from slot_extractor.evaluation.legacy_runner import default_scorers
+from slot_extractor.evaluation.legacy_scenarios import aggregate_scenario_slices
+from slot_extractor.evaluation.legacy_scorecard import aggregate_scorecard
 from slot_extractor.inference.llama_server import LlamaServerBackend, LlamaServerConfig
 from slot_extractor.inference.llama_server_manager import LlamaServerManager
-from slot_extractor.prompts.template import PromptBuilder
+from slot_extractor.prompts.legacy_template import LegacyPromptBuilder as PromptBuilder
 from slot_extractor.quantization.manifest import read_and_verify_manifest
 from slot_extractor.quantization.registry import ModelRegistry
-from slot_extractor.schemas.results import CaseResult, DimensionScore
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.schemas.legacy_sample import load_samples
+from slot_extractor.schemas.results import DimensionScore
+from slot_extractor.schemas.results import LegacyCaseResult as CaseResult
 
 
 @dataclass(frozen=True)

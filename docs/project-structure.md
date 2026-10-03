@@ -1,89 +1,59 @@
-# Project Structure
+# 项目结构
 
-This project follows the spec workflow:
-
-1. build inference harness and rule-based evaluation;
-2. freeze evaluation data and establish M0 baseline;
-3. build SFT / DPO training data;
-4. run LLaMA-Factory SFT / DPO experiments;
-5. merge, quantize to GGUF, and serve with llama.cpp;
-6. analyze failures and iterate.
+主流程是 Registry → SearchPatch → SearchState → Typesense 参数；训练流程是独立 Frozen Eval → Raw 审核 → SFT train/val → 两模型训练 → GGUF → 同一 Eval 验收。
 
 ```text
-.
-├── configs/                       # Runtime and experiment configuration
-│   ├── evaluation/                # Scoring thresholds, metric groups, report configs
-│   ├── inference/                 # Backend configs for remote LLM, local llama-server, etc.
-│   ├── quantization/              # Sole Phase 05 model registry and toolchain paths
-│   └── training/                  # LLaMA-Factory YAMLs and dataset registration
-│       └── llamafactory/
-│           ├── sft/
-│           ├── dpo/
-│           └── export/
-├── data/                          # Versioned datasets and intermediate data
-│   ├── raw/                       # Original logs, synthetic source drafts, manual seed cases
-│   ├── interim/                   # Cleaned / transformed data before final split
-│   ├── processed/                 # Train / val / DPO files ready for LLaMA-Factory
-│   │   ├── sft/
-│   │   ├── dpo/
-│   │   └── llamafactory/
-│   └── eval/                      # Frozen test.jsonl and holdout-like evaluation sets
-├── deployment/                    # Local deployment assets
-│   └── llama_cpp/                 # llama-server launch configs and notes
-├── docs/                          # Engineering notes beyond the main spec
-├── experiments/                   # Reproducible experiment outputs
-│   ├── baselines/                 # M0 baseline outputs
-│   ├── runs/                      # SFT / DPO / quantization comparison runs
-│   └── phase06/                   # Versioned multi-round iteration ledger and templates
-├── project-log/                   # Phase-by-phase construction logs
-│   ├── phase-01-scaffold/
-│   ├── phase-02-eval-baseline/
-│   ├── phase-03-dataset/
-│   ├── phase-04-training/
-│   ├── phase-05-quantization-deploy/
-│   ├── phase-06-iteration/
-│   └── phase-07-report/
-├── models/                        # Local model artifacts, ignored by git
-│   ├── base/                      # Downloaded base HF models or references
-│   ├── adapters/                  # LoRA / QLoRA adapters
-│   ├── merged/                    # Merged fp16 / bf16 HF models
-│   ├── gguf/                      # Quantized GGUF files
-│   └── imatrix/                   # Importance matrix calibration outputs
-├── reports/                       # Human-readable analysis and final project report
-│   └── generated/                 # Generated scorecards and comparison tables
-├── scripts/                       # Thin CLI entrypoints for common workflows
-│   ├── data/                      # Dataset generation, split, validation commands
-│   ├── eval/                      # Evaluation and scorecard commands
-│   ├── train/                     # Local dry-run and cloud training helper commands
-│   ├── quantize/                  # Merge, convert, imatrix, quantize commands
-│   └── serve/                     # Local llama-server startup commands
-├── src/
-│   └── slot_extractor/            # Project Python package
-│       ├── config/                # Typed config loading
-│       ├── data/                  # Dataset builders, converters, validators
-│       ├── evaluation/            # JSON parsing, schema checks, metrics, scorecards
-│       ├── inference/             # Backend clients and shared inference harness
-│       ├── quantization/          # Registry, lineage, manifests, runner and pipeline
-│       ├── prompts/               # Shared prompt templates for train / eval / deploy
-│       ├── schemas/               # Output schema and assertion definitions
-│       └── utils/                 # Shared utilities
-└── tests/
-    ├── fixtures/                  # Small deterministic sample cases
-    ├── unit/                      # Unit tests for parsers, validators, scorers
-    └── integration/               # End-to-end harness tests with mocked or local backends
+configs/
+  catalog/registry.yaml                 烘焙字段、值、单位、层级和索引映射
+  data/baking_search_v1.yaml             场景配额与搜索数据构建
+  evaluation/baking_search_v1.yaml       两模型共享 Eval 与硬门槛
+  inference/baking-qwen3-*.yaml          本地搜索推理
+  training/llamafactory/sft/baking-*.yaml 搜索 SFT overrides
+  quantization/baking_search_v1.yaml     搜索 Q4/F16 模型注册
+src/slot_extractor/
+  registry/                             业务 Registry 加载、校验和派生视图
+  schemas/search_patch.py                固定 Patch 协议
+  schemas/search_state.py                持久化搜索状态
+  schemas/{sample,dataset_contract}.py   搜索 Raw/Eval 合同
+  prompts/{rules,template}.py            搜索模型输入
+  search/                               校验、合并、单位归一化、查询编译
+  data/                                 Raw 生成、覆盖审计、隔离与 SFT 构建
+  evaluation/                           搜索断言、评分、切片与报告
+  inference/                            共用模型后端和 llama-server 管理
+  quantization/                         共用模型来源、hash 与产物校验
+  search_compare/                        搜索比较 API 和静态界面
+  utils/                                共用 JSONL 与诊断日志
+scripts/
+  data/generate_search_raw.py            搜索 Raw 生成入口
+  data/build_dataset.py                  搜索 SFT 构建入口
+  eval/validate_dataset.py               搜索数据校验入口
+  eval/run_eval.py                       搜索评估入口
+  train/render_config.py                 共用训练配置合并
+  train/check_search_data.py             搜索 token 预算预检
+  quantize/build_search.py               搜索量化入口
+data/
+  dataset-registry.yaml                  历史与搜索数据来源注册
+  eval/baking-v1.0/                      正式评估预留路径
+  raw/baking-v1.0/                       正式 Raw 预留路径
+  processed/sft/baking-v1.0/              正式 SFT 预留路径
+tests/
+  fixtures/baking_search_smoke.jsonl      开发 smoke，不是 Frozen Eval
+  conftest.py                           搜索默认收集与 legacy 标记
+  unit/search/                          确定性搜索运行时测试
+  integration/test_search_compare_app.py 搜索 API 测试
+  integration/test_pipeline_phase03.py   搜索 Raw → SFT CLI
+  integration/test_pipeline_llama_server.py 可选真实搜索服务器 smoke
+docs/                                   主线协议、流程与迁移说明
+docs/archive/                           历史 README 复现说明
 ```
 
-## Naming Rules
+预留路径不表示文件已存在。当前正式 baking 数据的状态仍为 `planned`；模型配置也不表示模型已训练。
+模型业务映射由 Catalog Registry 管理；量化 ModelRegistry 管理模型 artifact 和 lineage，两者职责不同。
+`configs/quantization/phase05.yaml` 仅为历史预约矩阵，搜索矩阵使用 `baking_search_v1.yaml`。
 
-- `data/eval/` is for frozen evaluation data. It must never be reused for training.
-- `data/processed/` is for training-ready SFT / DPO data and LLaMA-Factory registration files.
-- `experiments/` stores run outputs and metrics, while `reports/` stores curated summaries.
-- `experiments/phase06/registry.yaml` is the Phase 06 round index; `_template/` is copied for each new immutable iteration round.
-- `data/dataset-registry.yaml` tracks dataset roles, lineage, contracts, and retirement without overwriting old versions.
-- `project-log/` stores construction logs by implementation phase. Each phase directory has a Markdown log for goals, tasks, decisions, commands, outputs, problems, and next steps.
-- `models/` is intentionally ignored by git because it will contain large model artifacts.
-- `scripts/` should stay thin; reusable logic belongs in `src/slot_extractor/`.
-- `configs/quantization/phase05.yaml` is the only model-to-artifact path authority for
-  quantization, evaluation, serving, and the comparison app.
-- `scripts/quantize/run_phase05.py` is the operator entrypoint; generated manifests and model
-  artifacts stay under the ignored `models/` tree.
+## 历史边界
+
+`legacy_*` 模块、`tool_loop/`、Phase 04–06 专项脚本、旧模型、旧 Raw/Eval/SFT/DPO 和技师 fixture 原地保留。
+它们用于复现既有报告，不作为搜索默认路径，不继续添加搜索业务条件。
+默认测试跳过历史文件收集；显式 `-m "legacy and not local_backend"` 运行历史测试。
+包名与共用基础设施保持兼容，归档清单及验收状态见 [迁移记录](search-migration-notes.md)。

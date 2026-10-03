@@ -1,57 +1,36 @@
-from __future__ import annotations
+"""Search scenario and tag slices with explicit applicable denominators."""
 
-import json
 from collections import defaultdict
 
+from slot_extractor.schemas.results import CaseResult
 from slot_extractor.schemas.sample import Sample
 
 
 def scenario_labels(sample: Sample) -> set[str]:
-    labels: set[str] = set()
-    expected = sample.expected
-    if expected.get("action") == "tool_call":
-        labels.add("tool_call")
-    if any(
-        turn.get("role") == "tool" and _is_json_object(turn.get("content"))
-        for turn in sample.input.get("history", [])
-        if isinstance(turn, dict)
-    ):
-        labels.add("tool_result")
-    if sample.conversation_kind == "multi_turn":
-        labels.add("multi_turn")
-    if expected.get("unrelated") is True:
-        labels.add("unrelated")
-    if expected.get("confirmation") is True:
-        labels.add("confirmation")
-    if expected.get("info_complete") is False and expected.get("missing_info"):
-        labels.add("missing_information")
-    return labels
+    turn = "multi_turn" if sample.input["current_search_state"] is not None else "single_turn"
+    return {f"scenario:{sample.scenario}", f"tag:{turn}", *(f"tag:{tag}" for tag in sample.tags)}
 
 
-def _is_json_object(value: object) -> bool:
-    if not isinstance(value, str):
-        return False
-    try:
-        return isinstance(json.loads(value), dict)
-    except json.JSONDecodeError:
-        return False
-
-
-def aggregate_scenario_slices(
-    samples: list[Sample],
-    task_scores: dict[str, float],
-) -> dict[str, dict[str, float | int]]:
-    grouped: dict[str, list[float]] = defaultdict(list)
+def aggregate_scenario_slices(samples: list[Sample], cases: list[CaseResult]) -> dict:
+    by_id = {c.sample_id: c for c in cases}
+    grouped = defaultdict(list)
     for sample in samples:
-        score = task_scores.get(sample.id)
-        if score is None:
+        if sample.id not in by_id:
             continue
         for label in scenario_labels(sample):
-            grouped[label].append(score)
-    return {
-        label: {
-            "count": len(scores),
-            "task_correctness": sum(scores) / len(scores),
-        }
-        for label, scores in sorted(grouped.items())
-    }
+            grouped[label].append(by_id[sample.id])
+    result = {}
+    for label, rows in sorted(grouped.items()):
+        metrics = {}
+        for name in sorted({name for row in rows for name in row.dimensions}):
+            values = [
+                row.dimensions[name].score
+                for row in rows
+                if name in row.dimensions and row.dimensions[name].score is not None
+            ]
+            metrics[name] = {
+                "score": sum(values) / len(values) if values else None,
+                "applicable_count": len(values),
+            }
+        result[label] = {"count": len(rows), "metrics": metrics}
+    return result

@@ -1,11 +1,11 @@
 from slot_extractor.data.isolation import input_fingerprint
+from slot_extractor.data.legacy_raw_validator import validate_raw_sample
 from slot_extractor.data.phase06_round4_sft import (
     generate_large_round4_specialty,
     generate_round4_holdout,
     generate_small_round4_specialty,
 )
-from slot_extractor.data.raw_validator import validate_raw_sample
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.schemas.legacy_sample import load_samples
 
 
 def test_round4_samples_are_valid_and_unique() -> None:

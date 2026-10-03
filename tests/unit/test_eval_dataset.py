@@ -3,12 +3,12 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from slot_extractor.evaluation.assertions import evaluate_assertion
-from slot_extractor.schemas.dataset_contract import (
+from slot_extractor.evaluation.legacy_assertions import evaluate_assertion
+from slot_extractor.schemas.legacy_dataset_contract import (
     load_dataset_contract,
     validate_dataset_against_contract,
 )
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.schemas.legacy_sample import load_samples
 
 DATASET = Path("data/eval/test.jsonl")
 CONTRACT = Path("data/eval/dataset_contract.json")

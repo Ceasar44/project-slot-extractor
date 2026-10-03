@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from slot_extractor.data.isolation import input_fingerprint
+from slot_extractor.data.legacy_raw_validator import validate_raw_sample
 from slot_extractor.data.phase06_sft import generate_targeted_samples
-from slot_extractor.data.raw_validator import validate_raw_sample
 
 
 def test_targeted_phase06_samples_are_valid_and_unique() -> None:

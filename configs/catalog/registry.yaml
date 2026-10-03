@@ -1,0 +1,248 @@
+# Baking sauce Raw Dataset Spec v1.0, section 5.
+# Index names other than size_g are the initial search integration contract.
+registry_version: "1.0"
+search:
+  query_fields: [title, aliases, description]
+  sort_fields:
+    - {field: price, index_field: price, orders: [asc, desc]}
+    - {field: newest, index_field: published_at, orders: [desc]}
+    - {field: popularity, index_field: popularity, orders: [desc]}
+    - {field: rating, index_field: rating, orders: [desc]}
+fields:
+  - name: product_type
+    type: categorical
+    description: 商品本身的产品形态；不要根据用途推断。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: product_type
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: cream_spread, label: 奶油酱或涂抹酱, aliases: [奶油酱, 涂抹酱, cream spread]}
+      - {code: sauce_topping, label: 淋酱, aliases: [淋酱, topping, sauce topping]}
+      - {code: filling_paste, label: 夹馅酱或膏体, aliases: [夹馅酱, 膏体, filling paste]}
+      - {code: fruit_preparation, label: 水果制品或果酱, aliases: [水果制品, 果酱, fruit preparation]}
+  - name: flavor_family
+    type: categorical
+    description: 风味大类；明确说大类时使用，具体风味不重复输出大类。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: flavor_family
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: nut_seed, label: 坚果与籽类, aliases: [坚果味, 坚果与籽类, nut and seed]}
+      - {code: chocolate_cocoa, label: 巧克力与可可, aliases: [巧克力, 可可, chocolate, cocoa]}
+      - {code: caramel_sugar, label: 焦糖与糖香, aliases: [糖香, 焦糖类, caramel and sugar]}
+      - {code: tea_coffee, label: 茶与咖啡, aliases: [茶与咖啡, tea and coffee]}
+      - {code: fruit, label: 水果, aliases: [水果, 水果味]}
+      - {code: cream_custard, label: 奶香与卡仕达, aliases: [奶香, 奶香与卡仕达, cream and custard]}
+      - {code: root_bean, label: 根茎与豆类, aliases: [根茎与豆类, root and bean]}
+  - name: flavor
+    type: categorical
+    description: 具体风味；可多选，不为组合创造新代码，与过敏原独立。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: flavor
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    parent_field: flavor_family
+    values:
+      - {code: pistachio, label: 开心果, aliases: [开心果, 开心果味], parent: nut_seed}
+      - {code: hazelnut, label: 榛子, aliases: [榛子, 榛子味], parent: nut_seed}
+      - {code: peanut, label: 花生, aliases: [花生, 花生味], parent: nut_seed}
+      - {code: almond, label: 杏仁, aliases: [杏仁, 杏仁味], parent: nut_seed}
+      - {code: black_sesame, label: 黑芝麻, aliases: [黑芝麻, black sesame], parent: nut_seed}
+      - {code: dark_chocolate, label: 黑巧克力, aliases: [黑巧克力, 黑巧, dark chocolate], parent: chocolate_cocoa}
+      - {code: milk_chocolate, label: 牛奶巧克力, aliases: [牛奶巧克力, milk chocolate], parent: chocolate_cocoa}
+      - {code: white_chocolate, label: 白巧克力, aliases: [白巧克力, 白巧, white chocolate], parent: chocolate_cocoa}
+      - {code: caramel, label: 焦糖, aliases: [焦糖], parent: caramel_sugar}
+      - {code: salted_caramel, label: 海盐焦糖, aliases: [海盐焦糖, salted caramel], parent: caramel_sugar}
+      - {code: brown_sugar, label: 黑糖, aliases: [黑糖, brown sugar], parent: caramel_sugar}
+      - {code: matcha, label: 抹茶, aliases: [抹茶, 抹茶味], parent: tea_coffee}
+      - {code: hojicha, label: 焙茶, aliases: [焙茶], parent: tea_coffee}
+      - {code: coffee, label: 咖啡, aliases: [咖啡, 咖啡味], parent: tea_coffee}
+      - {code: strawberry, label: 草莓, aliases: [草莓], parent: fruit}
+      - {code: blueberry, label: 蓝莓, aliases: [蓝莓], parent: fruit}
+      - {code: raspberry, label: 覆盆子, aliases: [覆盆子, 树莓], parent: fruit}
+      - {code: mango, label: 芒果, aliases: [芒果], parent: fruit}
+      - {code: lemon, label: 柠檬, aliases: [柠檬], parent: fruit}
+      - {code: passion_fruit, label: 百香果, aliases: [百香果, passion fruit], parent: fruit}
+      - {code: vanilla, label: 香草, aliases: [香草], parent: cream_custard}
+      - {code: custard, label: 卡仕达, aliases: [卡仕达], parent: cream_custard}
+      - {code: cream_cheese, label: 奶油奶酪, aliases: [奶油奶酪, cream cheese], parent: cream_custard}
+      - {code: taro, label: 芋头, aliases: [芋头, 芋泥], parent: root_bean}
+      - {code: purple_sweet_potato, label: 紫薯, aliases: [紫薯, purple sweet potato], parent: root_bean}
+      - {code: red_bean, label: 红豆, aliases: [红豆, 豆沙, red bean], parent: root_bean}
+      - {code: chestnut, label: 栗子, aliases: [栗子], parent: root_bean}
+  - name: application
+    type: categorical
+    description: 制作对象，表示用酱做什么产品。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: application
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: croissant_pastry, label: 可颂或丹麦酥, aliases: [可颂, 丹麦酥, croissant, pastry]}
+      - {code: bread_toast, label: 面包吐司贝果, aliases: [面包, 吐司, 贝果, bread, toast, bagel]}
+      - {code: cake_cupcake, label: 蛋糕, aliases: [蛋糕, cake, cupcake]}
+      - {code: cookie_biscuit, label: 曲奇或饼干, aliases: [曲奇, 饼干, cookie, biscuit]}
+      - {code: choux_puff, label: 泡芙, aliases: [泡芙, choux, puff]}
+      - {code: macaron, label: 马卡龙, aliases: [马卡龙]}
+      - {code: tart_pie, label: 塔或派, aliases: [塔, 派, tart, pie]}
+      - {code: ice_cream_frozen, label: 冰淇淋或冷冻甜点, aliases: [冰淇淋, 冷冻甜点, ice cream, frozen dessert]}
+      - {code: plated_dessert, label: 盘式甜点, aliases: [盘式甜点, plated dessert]}
+      - {code: coffee_drink, label: 咖啡或饮品, aliases: [咖啡, 饮品, 拿铁, coffee, drink, latte]}
+  - name: use_mode
+    type: categorical
+    description: 使用方式，表示酱怎么用，与制作对象和产品形态独立。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: use_mode
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: spread, label: 涂抹, aliases: [涂抹]}
+      - {code: fill, label: 夹馅, aliases: [夹馅, 内馅, 夹心, filling]}
+      - {code: pipe, label: 挤注, aliases: [挤注, 裱挤, piping]}
+      - {code: drizzle, label: 淋面, aliases: [淋面, 淋酱]}
+      - {code: bake_in, label: 一起烘烤, aliases: [随产品一起烘烤, 一起烘烤, bake in]}
+      - {code: swirl, label: 拌入或旋纹, aliases: [拌入, 旋纹]}
+  - name: texture
+    type: categorical
+    description: 实际物理质构；不要根据夹心等用途推断质构。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: texture
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: pourable, label: 流动型, aliases: [流动型]}
+      - {code: squeezable, label: 可挤压, aliases: [可挤压]}
+      - {code: spoonable, label: 勺取型, aliases: [勺取型]}
+      - {code: spreadable, label: 易涂抹, aliases: [易涂抹]}
+      - {code: pipeable, label: 可裱挤, aliases: [可裱挤, 可挤注]}
+      - {code: chunky, label: 有颗粒, aliases: [有颗粒, 颗粒感]}
+  - name: dietary_claim
+    type: categorical
+    description: 商品经确认的饮食声明；只提取用户要求，不推断商品属性。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: dietary_claim
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: vegan, label: 纯素, aliases: [纯素]}
+      - {code: dairy_free, label: 无乳制品, aliases: [无乳制品, dairy free]}
+      - {code: gluten_free, label: 无麸质, aliases: [无麸质, gluten free]}
+      - {code: egg_free, label: 无蛋, aliases: [无蛋, egg free]}
+      - {code: soy_free, label: 无大豆, aliases: [无大豆, soy free]}
+      - {code: nut_free, label: 无坚果, aliases: [无坚果, nut free]}
+  - name: allergen
+    type: categorical
+    description: 过敏原包含或排除；安全要求只用硬条件，与风味独立。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: allergen
+    hard_operators: [in, not_in]
+    soft_operators: []
+    values:
+      - {code: milk, label: 牛奶或乳制品, aliases: [牛奶, 乳制品]}
+      - {code: egg, label: 鸡蛋, aliases: [鸡蛋, 蛋]}
+      - {code: peanut, label: 花生, aliases: [花生]}
+      - {code: tree_nut, label: 树坚果, aliases: [树坚果, tree nut, tree nuts]}
+      - {code: pistachio, label: 开心果, aliases: [开心果], parent: tree_nut}
+      - {code: hazelnut, label: 榛子, aliases: [榛子], parent: tree_nut}
+      - {code: almond, label: 杏仁, aliases: [杏仁], parent: tree_nut}
+      - {code: cashew, label: 腰果, aliases: [腰果], parent: tree_nut}
+      - {code: walnut, label: 核桃, aliases: [核桃], parent: tree_nut}
+      - {code: wheat, label: 小麦, aliases: [小麦]}
+      - {code: soy, label: 大豆, aliases: [大豆]}
+      - {code: sesame, label: 芝麻, aliases: [芝麻]}
+  - name: storage
+    type: categorical
+    description: 未开封时的储存要求。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: storage
+    hard_operators: [in, not_in]
+    soft_operators: [prefer, avoid]
+    values:
+      - {code: shelf_stable, label: 常温保存, aliases: [常温保存, 常温, shelf stable]}
+      - {code: refrigerated, label: 冷藏, aliases: [冷藏]}
+      - {code: frozen, label: 冷冻, aliases: [冷冻]}
+  - name: bake_stable
+    type: boolean
+    description: 已验证的烘烤稳定性；商品未知值不能视为不耐烤。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: bake_stable
+    hard_operators: [eq]
+    soft_operators: []
+    values: []
+  - name: sweetness_level
+    type: integer
+    description: 甜度1到5；不要太甜只提取lower，不猜数值。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: sweetness_level
+    hard_operators: [eq, gte, lte, between]
+    soft_operators: [lower, higher, around, between]
+    values: []
+    minimum: 1
+    maximum: 5
+  - name: flavor_intensity
+    type: integer
+    description: 风味强度1到5；浓一点只提取higher，不猜数值。
+    model_extractable: true
+    clearable: true
+    facet: true
+    index_field: flavor_intensity
+    hard_operators: [eq, gte, lte, between]
+    soft_operators: [lower, higher, around, between]
+    values: []
+    minimum: 1
+    maximum: 5
+  - name: price
+    type: number
+    description: 价格非负；明确货币才填unit，否则保留null供运行时补齐。
+    model_extractable: true
+    clearable: true
+    facet: false
+    index_field: price
+    hard_operators: [eq, gte, lte, between]
+    soft_operators: [lower, higher, around, between]
+    values: []
+    minimum: 0
+    unit_kind: currency
+    unit_pattern: '^[A-Z]{3}$'
+  - name: size
+    type: number
+    description: 包装净含量大于0；保留用户单位，不由模型换算。
+    model_extractable: true
+    clearable: true
+    facet: false
+    index_field: size_g
+    hard_operators: [eq, gte, lte, between]
+    soft_operators: [lower, higher, around, between]
+    values: []
+    minimum: 0
+    exclusive_minimum: true
+    unit_kind: mass
+    base_unit: g
+    units:
+      - {code: g, factor: 1}
+      - {code: kg, factor: 1000}
+      - {code: oz, factor: 28.349523125}

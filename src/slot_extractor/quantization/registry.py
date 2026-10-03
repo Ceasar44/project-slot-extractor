@@ -27,6 +27,7 @@ class ModelSpec:
     manifest_path: Path
     is_anchor: bool
     server_args: tuple[str, ...] = ()
+    adapter_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,9 @@ class ModelRegistry:
                     manifest_path=Path(record["manifest_path"]),
                     is_anchor=bool(record.get("is_anchor", False)),
                     server_args=tuple(str(value) for value in record.get("server_args", [])),
+                    adapter_path=Path(record["adapter_path"])
+                    if record.get("adapter_path")
+                    else None,
                 )
                 for record in records
             )

@@ -103,7 +103,7 @@ def parse_set_values(values: list[str]) -> dict[str, object]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Render phase04 LLaMA-Factory configs.")
+    parser = argparse.ArgumentParser(description="Render LLaMA-Factory run configurations.")
     target = parser.add_mutually_exclusive_group(required=True)
     target.add_argument("--run-id")
     target.add_argument("--all", action="store_true")

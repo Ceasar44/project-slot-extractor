@@ -1,10 +1,10 @@
 from slot_extractor.data.isolation import input_fingerprint
+from slot_extractor.data.legacy_raw_validator import validate_raw_sample
 from slot_extractor.data.phase06_round3_sft import (
     generate_large_round3_specialty,
     generate_shared_round3_samples,
     generate_small_round3_specialty,
 )
-from slot_extractor.data.raw_validator import validate_raw_sample
 
 
 def test_round3_targeted_samples_are_valid_and_unique() -> None:

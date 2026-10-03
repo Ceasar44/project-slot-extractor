@@ -7,9 +7,9 @@ import json
 from pathlib import Path
 
 from scripts.eval.phase04_artifacts import EFFECTIVE_TASK_THRESHOLD
-from slot_extractor.evaluation.runner import default_scorers
+from slot_extractor.evaluation.legacy_runner import default_scorers
+from slot_extractor.schemas.legacy_sample import load_samples
 from slot_extractor.schemas.results import GenerationResult
-from slot_extractor.schemas.sample import load_samples
 
 
 def main(argv: list[str] | None = None) -> int:

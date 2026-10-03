@@ -1,9 +1,9 @@
 # tests/integration/test_pipeline_mock.py
 from pathlib import Path
 
-from slot_extractor.evaluation.runner import run_evaluation
+from slot_extractor.evaluation.legacy_runner import run_evaluation
 from slot_extractor.inference.factory import build_backend_from_config
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.schemas.legacy_sample import load_samples
 
 
 def test_pipeline_runs_mock_backend_end_to_end() -> None:

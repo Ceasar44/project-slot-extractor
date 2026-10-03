@@ -20,13 +20,13 @@ from dataclasses import asdict
 from pathlib import Path
 
 from scripts.eval.phase04_artifacts import write_phase04_artifacts
-from slot_extractor.evaluation.runner import default_scorers
-from slot_extractor.evaluation.scenarios import aggregate_scenario_slices
-from slot_extractor.evaluation.scorecard import aggregate_scorecard, summarize_timing
+from slot_extractor.evaluation.legacy_runner import default_scorers
+from slot_extractor.evaluation.legacy_scenarios import aggregate_scenario_slices
+from slot_extractor.evaluation.legacy_scorecard import aggregate_scorecard, summarize_timing
 from slot_extractor.inference.factory import build_backend_from_config
-from slot_extractor.prompts.template import PromptBuilder
-from slot_extractor.schemas.results import CaseResult
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.prompts.legacy_template import LegacyPromptBuilder as PromptBuilder
+from slot_extractor.schemas.legacy_sample import load_samples
+from slot_extractor.schemas.results import LegacyCaseResult as CaseResult
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -1,13 +1,16 @@
-from __future__ import annotations
+"""Registry-aware baking raw gold generation with validation feedback."""
 
 import json
 from dataclasses import dataclass
 
-from slot_extractor.data.raw_sample import CATEGORY_TAGS, RawSample, raw_sample_from_record
+from slot_extractor.data.raw_sample import RAW_FIELDS, RawSample, raw_sample_from_record
 from slot_extractor.data.raw_schema import raw_response_schema
-from slot_extractor.data.raw_validator import validate_raw_sample
-from slot_extractor.data.scenario_specs import SCENARIOS, scenario_dpo_targets
+from slot_extractor.data.scenario_specs import SCENARIOS
+from slot_extractor.data.tag_audit import derive_tags
 from slot_extractor.inference.base import Backend, GenerationParams
+from slot_extractor.prompts.rules import SYSTEM_RULES, render_registry_summary
+from slot_extractor.registry import Registry
+from slot_extractor.schemas.output import parse_model_json
 
 
 class GenerationError(ValueError):
@@ -16,165 +19,123 @@ class GenerationError(ValueError):
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    category: str
-    count: int
-    scenario: str | None = None
+    scenario: str
+    index: int
+    split: str = "train"
+    seed: int = 42
 
 
 def generation_sample_id(request: GenerationRequest) -> str:
-    slug = {
-        "追问": "ask",
-        "工具调用": "tool",
-        "最终 JSON": "final",
-        "确认": "confirm",
-        "无关": "unrelated",
-    }[request.category]
-    return f"phase03-{slug}-{request.count:03d}"
+    if request.scenario not in SCENARIOS:
+        raise GenerationError(f"unknown scenario: {request.scenario}")
+    if type(request.index) is not int or not 1 <= request.index <= 999999:
+        raise GenerationError("index must be an integer between 1 and 999999")
+    if request.split not in {"train", "val", "eval"} or type(request.seed) is not int:
+        raise GenerationError("invalid split or seed")
+    return f"{request.split}-{request.index:06d}"
 
 
-def build_generation_messages(request: GenerationRequest) -> list[dict[str, object]]:
-    if request.category not in CATEGORY_TAGS or request.count < 1:
-        raise GenerationError("invalid generation request")
-    if request.scenario is not None:
-        spec = SCENARIOS.get(request.scenario)
-        if spec is None or spec.category != request.category:
-            raise GenerationError("scenario does not belong to requested category")
-    allowed = {
-        "追问": "P7",
-        "工具调用": "P6, P2P3",
-        "最终 JSON": "P4, P2P3",
-        "确认": "P5",
-        "无关": "P5, P6",
-    }[request.category]
+def build_generation_messages(request: GenerationRequest, registry: Registry) -> list[dict]:
     sample_id = generation_sample_id(request)
-    hard_tag = {
-        "追问": "相对时间",
-        "工具调用": "易混边界",
-        "最终 JSON": "幻觉陷阱",
-        "确认": "多义短词",
-        "无关": "易混边界",
-    }[request.category]
-    system = """你是预约信息抽取训练数据生成器。请生成一条高质量中文 raw 样本。
-只输出单个原始 JSON 对象，禁止 Markdown、解释和代码围栏。
-对象必须严格包含七个顶层字段且不得增删：id、output_kind、conversation_kind、tags、input、expected、dpo_targets。
-output_kind 只能是 final/tool_call，且必须等于 expected.action。
-conversation_kind 只能是 single_turn/multi_turn；tags 必须恰含一个主类别。
-input 必须包含 history、current_time、current_state、available_tools，
-并按场景包含 user_input；current_state 为对象或 null。
-history 保留 user/assistant/tool 事件；工具调用 arguments 与工具结果 content 必须是 JSON 字符串。
-history 中自然消息只能有 role/content 两个键；
-assistant 工具消息只能有 role/content/tool_calls 三个键且 content=null；
-工具结果只能有 role/tool_call_id/content 三个键。
-final expected 必须且只能包含以下 14 字段：
-action、gender_preference、technician_gender、start_time、duration_minutes、
-preferences、technician_name、technician_status、confirmation、info_complete、
-unrelated、missing_info、reply_type、reply。
-tool_call expected 必须且只能包含 action、tool_name、arguments；
-arguments 必须且只能包含 technician_name、start_time、duration_minutes、
-gender_preference、preferences。
-missing_info 仅由 start_time 和 duration_minutes 的缺失决定；info_complete 当且仅当两者齐全。
-unrelated=true 时预约槽位为空或默认值、reply_type=handoff、reply=null；
-confirmation=true 时信息必须完整。
-技师姓名只能来自最近工具结果；not_found/no_match 时姓名必须为 null。
-dpo_targets 必须从当前类别白名单选择，可为空，不得重复。生成自然、多样、可验证的边界样本。"""
-    user = (
-        f"生成类别：{request.category}\n"
-        f"该类别 dpo_targets 白名单：{allowed}\n"
-        f"请求序号：{request.count}\n"
-        f"Sample ID: {sample_id}\n"
-        f"id 必须严格使用 {sample_id}。\n"
-        f'tags 必须严格为 ["{request.category}","{hard_tag}"]。\n'
-        + {
-            "追问": (
-                "追问类按场景使用 single_turn 或 multi_turn；expected 为"
-                " info_complete=false 的 final 追问，缺什么就准确填写 missing_info。"
-            ),
-            "工具调用": (
-                "工具调用类按场景使用 single_turn 或 multi_turn；expected 为"
-                " find_technicians tool_call，时间与时长必须已完整且使用绝对时间。"
-            ),
-            "最终 JSON": (
-                "最终 JSON 类必须 multi_turn、不得有 user_input；history 严格依次为"
-                " user 自然消息、assistant 单个 tool_calls、对应 tool 结果；expected 技师"
-                "姓名必须来自该工具结果。"
-            ),
-            "确认": (
-                "确认类按场景构造接受、拒绝或知悉结果；expected 为完整 final，"
-                "confirmation 和 reply_type 必须严格服从场景说明。"
-            ),
-            "无关": (
-                "无关类必须 single_turn、history=[]；expected 为 unrelated=true 的 final，"
-                "预约槽位为空、missing_info=[]、reply_type=handoff、reply=null。"
-            ),
-        }[request.category]
-        + (
-            f"\n场景 ID：{request.scenario}\n"
-            f"场景硬约束：{SCENARIOS[request.scenario].instruction}\n"
-            f"dpo_targets 必须严格为 {list(scenario_dpo_targets(request.scenario))}。"
-            if request.scenario
-            else ""
-        )
-        + "\n只输出符合合同的 JSON。"
+    spec = SCENARIOS[request.scenario]
+    system = (
+        "你是烘焙风味酱搜索意图 Raw Gold 数据生成器。只输出单个原始 JSON，不要解释或代码围栏。\n"
+        "严格包含 id/scenario/tags/input/expected/assertions 六个顶层字段。"
+        "input 仅含 current_search_state 和 user_input；expected 是本轮最小 SearchPatch。\n"
+        "assertions 使用 {type,field} 对象，覆盖本题重要评分点，包含全局 minimal_patch。"
+        "不要生成自然语言回复、工具调用或完整历史。使用自然多样的中英文表达，不照抄例句。\n"
+        'id 由程序分配，tags 由程序推导；暂填 tags=["pending"]。\n'
+        f"提取规则：{SYSTEM_RULES}\nRegistry：{render_registry_summary(registry)}\n"
+        f"Raw JSON Schema：{json.dumps(raw_response_schema(registry), ensure_ascii=False)}"
     )
+    user = (
+        f"Sample ID: {sample_id}\nscenario: {request.scenario}\n"
+        f"多样性种子：{request.seed}，序号：{request.index}\n"
+        f"场景硬约束：{spec.instruction}\n参考表达：{spec.example}\n"
+        + (
+            "必须提供非空的 current_search_state。"
+            if spec.multi_turn
+            else "本场景生成单轮样本，current_search_state=null。"
+        )
+    )
+    if request.scenario == "single_filter":
+        fields = registry.model_extractable_fields()
+        user += f"\n本题目标字段：{fields[(request.index - 1) % len(fields)]}。"
+    elif request.scenario == "allergy_vs_flavor":
+        target = "allergen" if request.index % 2 else "flavor"
+        user += f"\n本题排除语义目标：{target}，不得附加另一字段的排除。"
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
 
-def parse_raw_json(text: str) -> dict[str, object]:
-    stripped = text.strip()
-    if stripped.startswith("```") or stripped.endswith("```"):
-        raise GenerationError("backend must return raw JSON without Markdown fences")
+def parse_raw_json(text: str) -> dict:
     try:
-        value = json.loads(stripped)
-    except json.JSONDecodeError as exc:
-        raise GenerationError("backend must return raw JSON") from exc
-    if not isinstance(value, dict):
-        raise GenerationError("backend raw JSON must be an object")
-    return value
+        return parse_model_json(text)
+    except ValueError as exc:
+        raise GenerationError(str(exc)) from exc
 
 
 class RawGenerator:
-    def __init__(self, backend: Backend, max_attempts: int = 3):
-        self.backend = backend
-        self.max_attempts = max_attempts
+    def __init__(self, backend: Backend, registry: Registry, max_attempts: int = 3):
+        if type(max_attempts) is not int or max_attempts < 1:
+            raise GenerationError("max_attempts must be a positive integer")
+        self.backend, self.registry, self.max_attempts = backend, registry, max_attempts
 
     def generate_one(self, request: GenerationRequest) -> RawSample:
-        messages = build_generation_messages(request)
+        sample_id = generation_sample_id(request)
+        messages = build_generation_messages(request, self.registry)
         params = GenerationParams(
+            temperature=0.7,
             max_tokens=4096,
-            response_schema=raw_response_schema(),
-            response_schema_name="phase03_raw",
+            response_schema=raw_response_schema(self.registry),
+            response_schema_name="baking_search_raw",
         )
-        last_error: ValueError | None = None
+        last_error = None
         for _ in range(self.max_attempts):
             result = self.backend.generate(messages, params)
             try:
                 record = parse_raw_json(result.text)
-                if request.scenario:
-                    record["dpo_targets"] = list(scenario_dpo_targets(request.scenario))
-                sample = raw_sample_from_record(record)
-                validate_raw_sample(sample)
-                return sample
+                if set(record) != RAW_FIELDS:
+                    raise GenerationError("raw output must contain exactly the six fixed fields")
+                if record.get("scenario") != request.scenario:
+                    raise GenerationError("scenario differs from requested scenario")
+                record["id"] = sample_id
+                record["tags"] = ["pending"]
+                sample = raw_sample_from_record(record, self.registry)
+                if {"type": "minimal_patch", "field": None} not in sample.assertions:
+                    raise GenerationError("assertions must include global minimal_patch")
+                multi = sample.input["current_search_state"] is not None
+                if multi != SCENARIOS[request.scenario].multi_turn:
+                    raise GenerationError("current_search_state differs from requested turn type")
+                conditions = sample.expected["hard_filters"] + sample.expected["soft_preferences"]
+                if request.scenario == "single_filter":
+                    fields = self.registry.model_extractable_fields()
+                    target = fields[(request.index - 1) % len(fields)]
+                    if conditions[0]["field"] != target:
+                        raise GenerationError(f"single_filter must cover requested field: {target}")
+                if request.scenario == "allergy_vs_flavor":
+                    target = "allergen" if request.index % 2 else "flavor"
+                    excluded = {
+                        c["field"]
+                        for c in conditions
+                        if c.get("op") == "not_in" or c.get("preference") == "avoid"
+                    }
+                    if target not in excluded or ({"allergen", "flavor"} - {target}) & excluded:
+                        raise GenerationError(f"allergy_vs_flavor must exclude only {target}")
+                record["tags"] = derive_tags(sample.to_dict(), self.registry)
+                return raw_sample_from_record(record, self.registry)
             except ValueError as exc:
                 last_error = exc
                 messages = [
                     *messages,
                     {"role": "assistant", "content": result.text},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"上一个 JSON 未通过校验：{exc}。请修正后重新输出完整的"
-                            "单个原始 JSON 对象；禁止解释和 Markdown。"
-                        ),
-                    },
+                    {"role": "user", "content": f"校验失败：{exc}。修正并输出完整原始 JSON。"},
                 ]
-        sample_id = generation_sample_id(request)
         raise GenerationError(
             f"{sample_id} failed after {self.max_attempts} attempts: {last_error}"
         ) from last_error
 
     def generate_many(self, requests: list[GenerationRequest]) -> list[RawSample]:
-        samples = [self.generate_one(request) for request in requests]
-        ids = [sample.id for sample in samples]
+        ids = [generation_sample_id(request) for request in requests]
         if len(ids) != len(set(ids)):
-            raise GenerationError("duplicate raw sample id")
-        return samples
+            raise GenerationError("duplicate generation request id")
+        return [self.generate_one(request) for request in requests]

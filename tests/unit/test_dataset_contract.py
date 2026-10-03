@@ -1,377 +1,299 @@
-import json
+from copy import deepcopy
+from dataclasses import replace
 
-from slot_extractor.schemas.dataset_contract import validate_sample_against_contract
-from slot_extractor.schemas.sample import ReplyExpectations, Sample
+import pytest
+from search_dataset_helpers import REGISTRY_PATH, multi_record, record, registry
 
-CONTRACT = {
-    "version": "2.3",
-    "business_hours": {"open": "09:00", "close": "21:00"},
-    "fields": {
-        "gender_preference": {"allowed_values": ["female", "male", None]},
-        "technician_gender": {"allowed_values": ["female", "male", None]},
-        "technician_status": {
-            "allowed_values": [
-                "not_checked",
-                "available",
-                "unavailable",
-                "not_found",
-                "no_match",
-            ]
-        },
-        "reply_type": {
-            "allowed_values": [
-                "handoff",
-                "ask_start_time",
-                "ask_duration",
-                "ask_start_time_and_duration",
-                "confirm_available",
-                "inform_unavailable",
-                "inform_not_found",
-                "inform_no_match",
-                "booking_authorized",
-                "acknowledge_result",
-                "appointment_paused",
-            ]
-        },
-    },
-    "completion": {
-        "allowed_missing_slots": ["start_time", "duration_minutes"],
-        "missing_slot_order": ["start_time", "duration_minutes"],
-    },
-    "reply": {
-        "allowed_acts": [
-            "ask_for_start_time",
-            "ask_for_duration",
-            "inform_technician_available",
-            "request_confirmation",
-            "inform_technician_unavailable",
-            "inform_technician_not_found",
-            "inform_no_match",
-            "acknowledge_booking_authorization",
-            "acknowledge_result",
-            "acknowledge_pause",
-            "claim_booking_success",
-        ],
-        "allowed_required_fields": [
-            "technician_name",
-            "start_time",
-            "duration_minutes",
-            "preferences",
-        ],
-    },
-    "tools": {
-        "find_technicians": {
-            "arguments": [
-                "technician_name",
-                "start_time",
-                "duration_minutes",
-                "gender_preference",
-                "preferences",
-            ]
-        }
-    },
-}
+from slot_extractor.registry import ValueSpec
+from slot_extractor.schemas.dataset_contract import (
+    ASSERTION_TYPES,
+    SCENARIO_CODES,
+    DatasetContractError,
+    load_dataset_contract,
+    validate_dataset_against_contract,
+    validate_record_against_contract,
+    validate_sample_against_contract,
+)
+from slot_extractor.schemas.sample import sample_from_record
+from slot_extractor.schemas.search_patch import HardFilter, SearchPatch, SortSpec
 
 
-def _expectations(
-    required_acts: tuple[str, ...] = ("inform_technician_available", "request_confirmation"),
-    forbidden_acts: tuple[str, ...] = ("claim_booking_success",),
-    required_fields: tuple[str, ...] = (
-        "technician_name",
-        "start_time",
-        "duration_minutes",
-    ),
-) -> ReplyExpectations:
-    return ReplyExpectations(
-        required_acts=required_acts,
-        forbidden_acts=forbidden_acts,
-        required_fields=required_fields,
-        references=("王芳技师明天下午2点有空，可以安排60分钟，您确认吗？",),
+@pytest.mark.parametrize("factory", [record, multi_record])
+def test_valid_gold(factory):
+    sample = sample_from_record(factory(), registry())
+    assert validate_sample_against_contract(sample, registry()) == []
+
+
+@pytest.mark.parametrize(
+    "area, field",
+    [
+        ("sample", "scenario"),
+        ("sample", "tags"),
+        ("sample", "assertions"),
+        ("input", "user_input"),
+        ("input", "current_search_state"),
+        ("expected", "reset"),
+        ("expected", "unmapped_terms"),
+    ],
+)
+def test_required_keys(area, field):
+    item = record()
+    del (item if area == "sample" else item[area])[field]
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize(
+    "area, key",
+    [
+        ("sample", "output_kind"),
+        ("sample", "dpo_targets"),
+        ("input", "history"),
+        ("input", "current_time"),
+        ("input", "current_state"),
+        ("expected", "reply"),
+        ("expected", "action"),
+    ],
+)
+def test_legacy_and_extra_keys_rejected(area, key):
+    item = record()
+    (item if area == "sample" else item[area])[key] = None
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ("id", " "),
+        ("id", None),
+        ("scenario", []),
+        ("scenario", "ask"),
+        ("tags", []),
+        ("tags", ["x"] * 2),
+        ("tags", [str(i) for i in range(17)]),
+        ("tags", [None]),
+        ("tags", [" "]),
+        ("assertions", "field_exact"),
+        ("input", []),
+        ("expected", None),
+    ],
+)
+def test_malformed_metadata(key, value):
+    item = record()
+    item[key] = value
+    with pytest.raises(DatasetContractError):
+        sample_from_record(item, registry())
+
+
+@pytest.mark.parametrize("value", [None, [], "json", 12])
+def test_nonobject_record(value):
+    assert validate_record_against_contract(value, registry())
+
+
+@pytest.mark.parametrize("value", ["", " ", "x" * 513, None, 1])
+def test_bad_user_input(value):
+    item = record()
+    item["input"]["user_input"] = value
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize(
+    "assertion",
+    [
+        {},
+        {"type": "field_exact", "field": None},
+        {"type": "field_exact", "field": "technician_name"},
+        {"type": "operator_correct", "field": "sort"},
+        {"type": "value_normalized", "field": "query_text"},
+        {"type": [], "field": None},
+        {"type": "minimal_patch", "field": []},
+        {"type": "unknown", "field": None},
+        {"type": "sort_correct", "field": None, "extra": True},
+    ],
+)
+def test_bad_assertion(assertion):
+    item = record()
+    item["assertions"] = [assertion]
+    assert validate_record_against_contract(item, registry())
+
+
+def test_duplicate_assertions():
+    item = record()
+    item["assertions"] *= 2
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize("kind", sorted(ASSERTION_TYPES))
+def test_all_assertion_types_supported(kind):
+    item = multi_record()
+    field = {
+        "field_replaced": "flavor",
+        "field_preserved": "application",
+        "field_exact": "allergen",
+        "operator_correct": "price",
+        "value_normalized": "flavor",
+    }.get(kind)
+    if kind == "field_cleared":
+        item["expected"]["clear_fields"] = ["application"]
+        field = "application"
+    item["assertions"] = [{"type": kind, "field": field}]
+    assert validate_record_against_contract(item, registry()) == []
+
+
+@pytest.mark.parametrize(
+    "kind, field",
+    [
+        ("field_replaced", "allergen"),
+        ("field_preserved", "flavor"),
+        ("field_cleared", "price"),
+        ("field_exact", "application"),
+    ],
+)
+def test_assertion_must_be_supported_by_gold(kind, field):
+    item = multi_record()
+    item["assertions"] = [{"type": kind, "field": field}]
+    assert validate_record_against_contract(item, registry())
+
+
+def test_duplicate_ids_aggregate_errors():
+    sample = sample_from_record(record(), registry())
+    broken = replace(sample, id="bad", scenario="ask")
+    with pytest.raises(DatasetContractError) as exc:
+        validate_dataset_against_contract([sample, sample, broken], registry())
+    assert "duplicate sample id" in str(exc.value)
+    assert "bad: scenario" in str(exc.value)
+
+
+def test_load_contract_is_registry():
+    assert load_dataset_contract(REGISTRY_PATH) == registry()
+    with pytest.raises(DatasetContractError):
+        load_dataset_contract("missing.yaml")
+
+
+def test_registry_drift_changes_validation_without_duplicate_enums():
+    base = registry()
+    added = ValueSpec("test_flavor", "测试", ())
+    changed = replace(
+        base,
+        fields=tuple(
+            replace(spec, values=(*spec.values, added)) if spec.name == "flavor" else spec
+            for spec in base.fields
+        ),
     )
+    item = record()
+    item["expected"]["soft_preferences"][0]["values"] = ["test_flavor"]
+    assert validate_record_against_contract(item, base)
+    assert validate_record_against_contract(item, changed) == []
 
 
-def _final(**overrides: object) -> dict:
-    value = {
-        "action": "final",
-        "gender_preference": None,
-        "technician_gender": "female",
-        "start_time": "2026-06-09 14:00",
-        "duration_minutes": 60,
-        "preferences": [],
-        "technician_name": "王芳",
-        "technician_status": "available",
-        "confirmation": False,
-        "info_complete": True,
-        "unrelated": False,
-        "missing_info": [],
-        "reply_type": "confirm_available",
-        "reply": "王芳技师明天下午2点有空，可以安排60分钟，您确认吗？",
+def test_nonextractable_field_rejected_in_gold():
+    base = registry()
+    changed = replace(
+        base,
+        fields=tuple(
+            replace(spec, model_extractable=False) if spec.name == "flavor" else spec
+            for spec in base.fields
+        ),
+    )
+    assert validate_record_against_contract(record(), changed)
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_CODES)
+def test_each_scenario_requires_appropriate_patch(scenario):
+    item = record()
+    item["scenario"] = scenario
+    item["expected"] = SearchPatch().to_dict()
+    assert validate_record_against_contract(item, registry())
+
+
+def test_minimal_patch_detects_repeated_old_field():
+    item = multi_record()
+    item["expected"]["hard_filters"].append(
+        deepcopy(item["input"]["current_search_state"]["hard_filters"][0])
+    )
+    assert any("minimal_patch" in e for e in validate_record_against_contract(item, registry()))
+    item["assertions"] = []
+    assert validate_record_against_contract(item, registry()) == []
+
+
+def test_clear_and_set_conflict():
+    item = multi_record()
+    item["expected"]["clear_fields"] = ["flavor"]
+    assert any("clear and set" in e for e in validate_record_against_contract(item, registry()))
+
+
+def test_reset_with_clear_is_redundant():
+    item = record()
+    item["scenario"] = "reset"
+    item["expected"]["reset"] = True
+    item["expected"]["clear_fields"] = ["price"]
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize("field", ["query_text", "sort"])
+def test_special_fields_can_be_cleared_and_asserted(field):
+    item = multi_record()
+    item["scenario"] = "clear"
+    item["input"]["current_search_state"][field] = (
+        "Dubai Chocolate" if field == "query_text" else {"field": "price", "order": "asc"}
+    )
+    item["expected"] = SearchPatch(clear_fields=(field,)).to_dict()
+    item["assertions"] = [{"type": "field_cleared", "field": field}]
+    assert validate_record_against_contract(item, registry()) == []
+
+
+def test_condition_order_does_not_fake_replacement():
+    item = multi_record()
+    before = HardFilter("flavor", "in", values=("pistachio", "matcha")).to_dict()
+    item["input"]["current_search_state"]["hard_filters"] = [before]
+    item["input"]["current_search_state"]["soft_preferences"] = []
+    after = deepcopy(before)
+    after["values"].reverse()
+    item["expected"] = SearchPatch().to_dict()
+    item["expected"]["hard_filters"] = [after]
+    item["assertions"] = []
+    assert validate_record_against_contract(item, registry())
+
+
+@pytest.mark.parametrize("scenario", SCENARIO_CODES)
+def test_valid_example_for_every_scenario(scenario):
+    item = multi_record() if scenario in {"replace", "clear", "preserve_state"} else record()
+    item["scenario"] = scenario
+    item["assertions"] = []
+    patches = {
+        "single_filter": SearchPatch(hard_filters=(HardFilter("price", "lte", value=20),)),
+        "multi_filter": SearchPatch(
+            hard_filters=(
+                HardFilter("price", "lte", value=20),
+                HardFilter("flavor", "in", values=("pistachio",)),
+            )
+        ),
+        "negation": SearchPatch(hard_filters=(HardFilter("flavor", "not_in", values=("peanut",)),)),
+        "allergy_vs_flavor": SearchPatch(
+            hard_filters=(HardFilter("allergen", "not_in", values=("peanut",)),)
+        ),
+        "clear": SearchPatch(clear_fields=("flavor",)),
+        "numeric_price": SearchPatch(hard_filters=(HardFilter("price", "lte", value=20),)),
+        "numeric_size": SearchPatch(hard_filters=(HardFilter("size", "eq", value=8, unit="oz"),)),
+        "sort": SearchPatch(sort=SortSpec("price", "asc")),
+        "query_text": SearchPatch(query_text="Dubai Chocolate"),
+        "unmapped": SearchPatch(unmapped_terms=("高级一点",)),
+        "reset": SearchPatch(reset=True),
     }
-    value.update(overrides)
-    return value
+    if scenario in patches:
+        item["expected"] = patches[scenario].to_dict()
+    if scenario == "unmapped":
+        item["input"]["user_input"] += "，高级一点"
+    assert validate_record_against_contract(item, registry()) == []
 
 
-def _state(**overrides: object) -> dict:
-    value = {
-        "gender_preference": None,
-        "technician_gender": None,
-        "start_time": "2026-06-09 14:00",
-        "duration_minutes": 60,
-        "preferences": [],
-        "technician_name": "王芳",
-        "technician_status": "not_checked",
-        "confirmation": False,
-        "info_complete": True,
-        "unrelated": False,
-        "missing_info": [],
-        "last_reply_type": None,
-    }
-    value.update(overrides)
-    return value
+def test_dataset_invalid_unhashable_id_is_diagnostic():
+    sample = sample_from_record(record(), registry())
+    with pytest.raises(DatasetContractError, match="id: must be nonempty text"):
+        validate_dataset_against_contract([replace(sample, id=[])], registry())
 
 
-def _tool_history(status: str = "available") -> list[dict]:
-    arguments = {
-            "technician_name": "王芳",
-            "start_time": "2026-06-09 14:00",
-            "duration_minutes": 60,
-            "gender_preference": None,
-            "preferences": [],
-    }
-    result = {
-            "mode": "specific",
-            "status": status,
-            "requested_technician": "王芳",
-            "technician": {"name": "王芳", "gender": "female"},
-    }
-    return [
-        {"role": "user", "content": "明天下午两点，60分钟，找王芳"},
-        {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {
-                    "id": "call-1",
-                    "type": "function",
-                    "function": {
-                        "name": "find_technicians",
-                        "arguments": json.dumps(arguments, ensure_ascii=False, separators=(",", ":")),
-                    },
-                }
-            ],
-        },
-        {
-            "role": "tool",
-            "tool_call_id": "call-1",
-            "content": json.dumps(result, ensure_ascii=False, separators=(",", ":")),
-        },
-    ]
-
-
-def _checked_history(status: str = "available") -> list[dict]:
-    reply = {
-        "available": "王芳技师明天下午2点有空，可以安排60分钟，您确认吗？",
-        "unavailable": "王芳技师明天下午2点没有空，您想调整吗？",
-    }[status]
-    return [*_tool_history(status), {"role": "assistant", "content": reply}]
-
-
-def _sample(
-    expected: dict,
-    *,
-    current_state: dict | None = None,
-    history: list[dict] | None = None,
-    user_input: str | None = None,
-    expectations: ReplyExpectations | None = None,
-) -> Sample:
-    return Sample(
-        id="case",
-        output_kind="tool_call" if expected["action"] == "tool_call" else "final",
-        conversation_kind=(
-            "multi_turn"
-            if sum(turn.get("role") == "user" for turn in (history or []))
-            + (user_input is not None)
-            >= 2
-            else "single_turn"
-        ),
-        input={
-            "history": history or [],
-            "current_state": current_state,
-            "user_input": user_input,
-            "current_time": "2026-06-08 10:00",
-            "available_tools": ["find_technicians"],
-        },
-        expected=expected,
-        assertions=[],
-        tags=[],
-        reply_expectations=expectations,
-    )
-
-
-def test_available_final_accepts_matching_tool_history() -> None:
-    sample = _sample(
-        _final(),
-        current_state=_state(),
-        history=_tool_history(),
-        expectations=_expectations(),
-    )
-    assert validate_sample_against_contract(sample, CONTRACT) == []
-
-
-def test_tool_result_final_accepts_null_current_state() -> None:
-    sample = _sample(
-        _final(),
-        current_state=None,
-        history=_tool_history(),
-        expectations=_expectations(),
-    )
-    assert validate_sample_against_contract(sample, CONTRACT) == []
-
-
-def test_available_final_without_tool_history_is_rejected() -> None:
-    errors = validate_sample_against_contract(
-        _sample(_final(), current_state=_state(), expectations=_expectations()),
-        CONTRACT,
-    )
-    assert any("confirm_available requires matching latest tool result" in error for error in errors)
-
-
-def test_paused_plan_uses_pending_current_state_without_latest_tool_result() -> None:
-    expected = _final(
-        reply_type="appointment_paused",
-        reply="好的，暂时不给您预约。",
-    )
-    sample = _sample(
-        expected,
-        current_state=_state(
-            technician_gender="female",
-            technician_status="available",
-            last_reply_type="confirm_available",
-        ),
-        history=_checked_history(),
-        user_input="先不了",
-        expectations=_expectations(
-            required_acts=("acknowledge_pause",),
-            required_fields=(),
-        ),
-    )
-    assert validate_sample_against_contract(sample, CONTRACT) == []
-
-
-def test_confirmation_requires_matching_pending_state() -> None:
-    expected = _final(
-        confirmation=True,
-        reply_type="booking_authorized",
-        reply="好的，正在为您办理预约。",
-    )
-    errors = validate_sample_against_contract(
-        _sample(
-            expected,
-            current_state=_state(
-                duration_minutes=90,
-                technician_status="available",
-                last_reply_type="confirm_available",
-            ),
-            user_input="确认",
-            expectations=_expectations(
-                required_acts=("acknowledge_booking_authorization",),
-                required_fields=(),
-            ),
-        ),
-        CONTRACT,
-    )
-    assert any("current_state must match confirmed plan" in error for error in errors)
-
-
-def test_missing_time_requires_ask_start_time_reply_type() -> None:
-    expected = _final(
-        gender_preference=None,
-        technician_gender=None,
-        start_time=None,
-        technician_name=None,
-        technician_status="not_checked",
-        info_complete=False,
-        missing_info=["start_time"],
-        reply_type="ask_duration",
-        reply="请问您想按摩多长时间呢？",
-    )
-    errors = validate_sample_against_contract(
-        _sample(
-            expected,
-            user_input="想按摩60分钟",
-            expectations=_expectations(
-                required_acts=("ask_for_start_time",),
-                required_fields=(),
-            ),
-        ),
-        CONTRACT,
-    )
-    assert any("missing_info requires reply_type='ask_start_time'" in error for error in errors)
-
-
-def test_handoff_requires_null_reply() -> None:
-    expected = _final(
-        gender_preference=None,
-        technician_gender=None,
-        start_time=None,
-        duration_minutes=None,
-        technician_name=None,
-        technician_status="not_checked",
-        info_complete=False,
-        unrelated=True,
-        missing_info=[],
-        reply_type="handoff",
-        reply=None,
-    )
-    sample = _sample(
-        expected,
-        user_input="今天天气怎么样",
-        expectations=_expectations(required_acts=(), forbidden_acts=(), required_fields=()),
-    )
-    assert validate_sample_against_contract(sample, CONTRACT) == []
-
-
-def test_tool_call_rejects_unknown_duration() -> None:
-    expected = {
-        "action": "tool_call",
-        "tool_name": "find_technicians",
-        "arguments": {
-            "technician_name": "王芳",
-            "start_time": "2026-06-09 14:00",
-            "duration_minutes": None,
-            "gender_preference": None,
-            "preferences": [],
-        },
-    }
-    errors = validate_sample_against_contract(
-        _sample(expected, user_input="明天下午两点找王芳，时长没定"),
-        CONTRACT,
-    )
-    assert any("duration_minutes" in error for error in errors)
-
-
-def test_every_turn_requires_full_runtime_input_keys() -> None:
-    sample = _sample(
-        _final(),
-        current_state=_state(),
-        history=_tool_history(),
-        expectations=_expectations(),
-    )
-    sample.input.pop("available_tools")
-    errors = validate_sample_against_contract(sample, CONTRACT)
-    assert any("input keys" in error for error in errors)
-
-
-def test_reply_expectations_reject_unknown_act_and_field() -> None:
-    sample = _sample(
-        _final(),
-        current_state=_state(),
-        history=_tool_history(),
-        expectations=_expectations(
-            required_acts=("unknown_act",),
-            required_fields=("unknown_field",),
-        ),
-    )
-    errors = validate_sample_against_contract(sample, CONTRACT)
-    assert any("unsupported reply act" in error for error in errors)
-    assert any("unsupported required reply field" in error for error in errors)
+@pytest.mark.parametrize("extra", ["schema_version", "reset", "unmapped_terms", "clear_fields"])
+def test_patch_commands_never_persist_in_state(extra):
+    item = multi_record()
+    item["input"]["current_search_state"][extra] = None
+    assert validate_record_against_contract(item, registry())

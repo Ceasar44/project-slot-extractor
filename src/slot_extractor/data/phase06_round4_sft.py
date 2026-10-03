@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from slot_extractor.data.isolation import assert_no_eval_overlap, input_fingerprint
+from slot_extractor.data.legacy_raw_sample import RawSample, raw_sample_from_record
+from slot_extractor.data.legacy_raw_validator import validate_raw_sample
+from slot_extractor.data.legacy_sft_render import render_sft
 from slot_extractor.data.phase06_round2_sft import (
     DURATIONS,
     NAMES,
@@ -30,9 +33,6 @@ from slot_extractor.data.phase06_round3_sft import (
     generate_shared_round3_samples,
 )
 from slot_extractor.data.phase06_sft import _final, _input, _sample, _state, _tool
-from slot_extractor.data.raw_sample import RawSample, raw_sample_from_record
-from slot_extractor.data.raw_validator import validate_raw_sample
-from slot_extractor.data.sft_render import render_sft
 from slot_extractor.utils.jsonl import read_jsonl, write_jsonl
 
 

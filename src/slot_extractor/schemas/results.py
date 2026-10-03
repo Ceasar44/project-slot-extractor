@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .search_patch import SearchPatch
+
 
 @dataclass(frozen=True)
 class GenerationResult:
@@ -31,6 +33,27 @@ class DimensionScore:
 
 @dataclass(frozen=True)
 class CaseResult:
+    sample_id: str
+    model_output: str
+    dimensions: dict[str, DimensionScore]
+    output: SearchPatch | None = None
+    scenario: str | None = None
+    total_ms: float | None = None
+    first_token_ms: float | None = None
+    tokens_per_s: float | None = None
+    tags: list[str] = field(default_factory=list)
+    assertions: list[dict[str, Any]] = field(default_factory=list)
+    validation_errors: list[dict[str, Any]] = field(default_factory=list)
+    field_counts: dict[str, int] = field(default_factory=dict)
+    expected: dict[str, Any] | None = None
+    merged_state: dict[str, Any] | None = None
+    expected_state: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class LegacyCaseResult:
+    """Explicit report shape for historical appointment evaluation."""
+
     sample_id: str
     output_kind: str
     conversation_kind: str
@@ -60,5 +83,12 @@ class Scorecard:
     model: str
     n: int
     dimensions: dict[str, DimensionScore]
-    cases: list[CaseResult]
+    cases: list[CaseResult] | list[LegacyCaseResult]
     timing: TimingSummary | None = None
+
+
+@dataclass(frozen=True)
+class SearchScorecard(Scorecard):
+    scenario_slices: dict[str, Any] = field(default_factory=dict)
+    assertion_stats: dict[str, Any] = field(default_factory=dict)
+    field_metrics: dict[str, Any] = field(default_factory=dict)

@@ -1,39 +1,64 @@
+"""Offline SearchPatch raw-to-SFT CLI smoke with an independent frozen eval fixture."""
+
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import yaml
 
-from slot_extractor.utils.jsonl import read_jsonl
+from slot_extractor.schemas.search_patch import HardFilter, SearchPatch
+from slot_extractor.utils.jsonl import read_jsonl, write_jsonl
 
 
-def test_mock_pipeline_builds_25_samples(tmp_path) -> None:
-    config = yaml.safe_load(Path("configs/data/phase03.yaml").read_text(encoding="utf-8"))
-    config["counts"] = {category: 5 for category in config["counts"]}
-    config.pop("dpo_target_counts", None)
-    test_config = tmp_path / "phase03_test.yaml"
-    test_config.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
-
+def test_search_raw_to_sft_cli(tmp_path):
+    records = [
+        {
+            "id": f"train-{i:06d}",
+            "scenario": "single_filter",
+            "tags": ["single_turn", "flavor"],
+            "input": {"current_search_state": None, "user_input": f"开心果味的，需求{i}"},
+            "expected": SearchPatch(
+                hard_filters=(HardFilter("flavor", "in", values=("pistachio",)),)
+            ).to_dict(),
+            "assertions": [{"type": "field_exact", "field": "flavor"}],
+        }
+        for i in range(1, 11)
+    ]
+    evaluation = json.loads(json.dumps(records[0]))
+    evaluation["id"] = "eval-000001"
+    evaluation["input"]["user_input"] = "只要 pistachio 风味"
+    write_jsonl(tmp_path / "raw.jsonl", records)
+    write_jsonl(tmp_path / "eval.jsonl", [evaluation])
+    config = {
+        "version": "baking-v1.0",
+        "registry_path": "configs/catalog/registry.yaml",
+        "seed": 42,
+        "eval_path": str(tmp_path / "eval.jsonl"),
+        "output_root": str(tmp_path / "out"),
+    }
+    (tmp_path / "config.yaml").write_text(yaml.safe_dump(config))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(Path.cwd() / "src"), str(Path.cwd()), env.get("PYTHONPATH", "")]
+    )
     completed = subprocess.run(
         [
             sys.executable,
             "-m",
             "scripts.data.build_dataset",
-            "--mock",
             "--config",
-            str(test_config),
-            "--output-root",
-            str(tmp_path),
+            str(tmp_path / "config.yaml"),
+            "--raw-input",
+            str(tmp_path / "raw.jsonl"),
         ],
         text=True,
         capture_output=True,
+        env=env,
     )
     assert completed.returncode == 0, completed.stderr
-    assert "raw=25, sft_train=20, sft_val=5, dpo_train=28, dpo_val=6" in completed.stdout
-    assert len(list(read_jsonl(tmp_path / "raw/v0.1/samples.jsonl"))) == 25
-    assert len(list(read_jsonl(tmp_path / "processed/sft/v0.1/train.jsonl"))) == 20
-    assert len(list(read_jsonl(tmp_path / "processed/sft/v0.1/val.jsonl"))) == 5
-    assert len(list(read_jsonl(tmp_path / "processed/dpo/v0.1/train.jsonl"))) == 28
-    assert len(list(read_jsonl(tmp_path / "processed/dpo/v0.1/val.jsonl"))) == 6
-    assert (tmp_path / "processed/v0.1/dataset_info.json").exists()
-    assert (tmp_path / "processed/v0.1/DATASET_CARD.md").exists()
+    assert "raw=10, sft_train=9, sft_val=1" in completed.stdout
+    rows = list(read_jsonl(tmp_path / "out/processed/sft/baking-v1.0/train.jsonl"))
+    assert all(set(r) == {"system", "conversations"} for r in rows)
+    assert not (tmp_path / "out/processed/dpo").exists()

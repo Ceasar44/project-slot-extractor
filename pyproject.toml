@@ -1,7 +1,7 @@
 [project]
 name = "slot-extractor-finetune"
 version = "0.1.0"
-description = "Local fine-tuning and evaluation harness for appointment slot extraction."
+description = "Fine-tuning and evaluation harness for baking search parameter extraction."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,9 +17,12 @@ dependencies = [
 [project.scripts]
 slot-eval = "scripts.eval.run_eval:main"
 slot-build-dataset = "scripts.data.build_dataset:main"
+search-eval = "scripts.eval.run_eval:main"
+search-build-dataset = "scripts.data.build_dataset:main"
 
 [dependency-groups]
 dev = [
+    "jsonschema>=4.23.0",
     "pytest>=8.2.0",
     "ruff>=0.5.0",
 ]
@@ -39,9 +42,10 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not local_backend'"
+addopts = "-m 'not local_backend and not legacy'"
 markers = [
     "local_backend: requires a running local llama-server",
+    "legacy: frozen appointment regressions, opt in explicitly",
 ]
 
 [build-system]

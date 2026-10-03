@@ -1,24 +1,15 @@
+"""Closed JSON Schema derived from Registry and the SearchPatch payload grammar."""
+
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
-TIME_PATTERN = r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$"
-GENDERS = ["female", "male", None]
-STATUSES = ["not_checked", "available", "unavailable", "not_found", "no_match"]
-REPLY_TYPES = [
-    "handoff",
-    "ask_start_time",
-    "ask_duration",
-    "ask_start_time_and_duration",
-    "confirm_available",
-    "inform_unavailable",
-    "inform_not_found",
-    "inform_no_match",
-    "booking_authorized",
-    "acknowledge_result",
-    "appointment_paused",
-]
+from slot_extractor.registry import FieldSpec, Registry
+from slot_extractor.schemas.dataset_contract import (
+    ASSERTION_TYPES,
+    SCENARIO_CODES,
+    assertion_fields,
+)
 
 
 def _closed(properties: dict[str, Any]) -> dict[str, Any]:
@@ -30,198 +21,161 @@ def _closed(properties: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _nullable_string() -> dict[str, Any]:
-    return {"type": ["string", "null"]}
+def _text(limit: int | None = None) -> dict[str, Any]:
+    result = {"type": "string", "minLength": 1, "pattern": r"\S"}
+    if limit is not None:
+        result["maxLength"] = limit
+    return result
 
 
-def _arguments() -> dict[str, Any]:
-    return _closed(
-        {
-            "technician_name": _nullable_string(),
-            "start_time": {"type": "string", "pattern": TIME_PATTERN},
-            "duration_minutes": {"type": "integer", "minimum": 1},
-            "gender_preference": {"type": ["string", "null"], "enum": GENDERS},
-            "preferences": {"type": "array", "items": {"type": "string"}},
-        }
-    )
+def _nullable(schema: dict) -> dict:
+    return {"anyOf": [schema, {"type": "null"}]}
 
 
-def _final() -> dict[str, Any]:
-    return _closed(
-        {
-            "action": {"type": "string", "const": "final"},
-            "gender_preference": {"type": ["string", "null"], "enum": GENDERS},
-            "technician_gender": {"type": ["string", "null"], "enum": GENDERS},
-            "start_time": {
-                "anyOf": [
-                    {"type": "string", "pattern": TIME_PATTERN},
-                    {"type": "null"},
-                ]
-            },
-            "duration_minutes": {
-                "anyOf": [
-                    {"type": "integer", "minimum": 1},
-                    {"type": "null"},
-                ]
-            },
-            "preferences": {"type": "array", "items": {"type": "string"}},
-            "technician_name": _nullable_string(),
-            "technician_status": {"type": "string", "enum": STATUSES},
-            "confirmation": {"type": "boolean"},
-            "info_complete": {"type": "boolean"},
-            "unrelated": {"type": "boolean"},
-            "missing_info": {
-                "type": "array",
-                "items": {
-                    "type": "string",
-                    "enum": ["start_time", "duration_minutes"],
-                },
-            },
-            "reply_type": {"type": "string", "enum": REPLY_TYPES},
-            "reply": _nullable_string(),
-        }
-    )
+def _number(spec: FieldSpec) -> dict:
+    schema = {"type": spec.type}
+    if spec.minimum is not None:
+        schema["exclusiveMinimum" if spec.exclusive_minimum else "minimum"] = spec.minimum
+    if spec.maximum is not None:
+        schema["maximum"] = spec.maximum
+    return schema
 
 
-def _tool_call() -> dict[str, Any]:
-    return _closed(
-        {
-            "action": {"type": "string", "const": "tool_call"},
-            "tool_name": {"type": "string", "const": "find_technicians"},
-            "arguments": {"$ref": "#/$defs/arguments"},
-        }
-    )
+def _unit(spec: FieldSpec, operator: str) -> dict:
+    if spec.unit_kind == "mass":
+        schema = {"type": "string", "enum": [u.code for u in spec.units]}
+        return _nullable(schema) if operator in {"lower", "higher"} else schema
+    if spec.unit_kind == "currency":
+        # Runtime uses fullmatch; JSON Schema patterns otherwise match substrings.
+        return _nullable({"type": "string", "pattern": f"^(?:{spec.unit_pattern})$"})
+    return {"type": "null"}
 
 
-def _history_item() -> dict[str, Any]:
-    natural_user = _closed(
-        {
-            "role": {"type": "string", "const": "user"},
-            "content": {"type": "string", "minLength": 1},
-        }
-    )
-    natural_assistant = _closed(
-        {
-            "role": {"type": "string", "const": "assistant"},
-            "content": {"type": "string", "minLength": 1},
-        }
-    )
-    function = _closed(
-        {
-            "name": {"type": "string", "const": "find_technicians"},
-            "arguments": {"type": "string", "minLength": 2},
-        }
-    )
-    call = _closed(
-        {
-            "id": {"type": "string", "minLength": 1},
-            "type": {"type": "string", "const": "function"},
-            "function": function,
-        }
-    )
-    tool_assistant = _closed(
-        {
-            "role": {"type": "string", "const": "assistant"},
-            "content": {"type": "null"},
-            "tool_calls": {
-                "type": "array",
-                "items": call,
-                "minItems": 1,
-                "maxItems": 1,
-            },
-        }
-    )
-    tool_result = _closed(
-        {
-            "role": {"type": "string", "const": "tool"},
-            "tool_call_id": {"type": "string", "minLength": 1},
-            "content": {"type": "string", "minLength": 2},
-        }
-    )
-    return {"anyOf": [natural_user, natural_assistant, tool_assistant, tool_result]}
-
-
-def _state() -> dict[str, Any]:
+def _condition(spec: FieldSpec, operator: str, *, soft: bool) -> dict:
+    null = {"type": "null"}
     properties = {
-        "start_time": _final()["properties"]["start_time"],
-        "duration_minutes": _final()["properties"]["duration_minutes"],
-        "preferences": {"type": "array", "items": {"type": "string"}},
-        "technician_name": _nullable_string(),
-        "technician_status": {"type": "string", "enum": STATUSES},
-        "confirmation": {"type": "boolean"},
-        "info_complete": {"type": "boolean"},
-        "unrelated": {"type": "boolean"},
-        "missing_info": {
-            "type": "array",
-            "items": {
-                "type": "string",
-                "enum": ["start_time", "duration_minutes"],
-            },
-        },
-        "last_reply_type": {"type": "string", "enum": REPLY_TYPES},
-        "gender_preference": {"type": ["string", "null"], "enum": GENDERS},
-        "technician_gender": {"type": ["string", "null"], "enum": GENDERS},
+        "field": {"type": "string", "const": spec.name},
+        "preference" if soft else "op": {"type": "string", "const": operator},
+        "value": null,
+        "values": {"type": "array", "maxItems": 0},
+        "min_value": null,
+        "max_value": null,
+        "unit": _unit(spec, operator),
     }
-    return {"anyOf": [{"type": "null"}, _closed(properties)]}
+    if operator in {"in", "not_in", "prefer", "avoid"}:
+        properties["values"] = {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": True,
+            "items": {"type": "string", "enum": [v.code for v in spec.values]},
+        }
+    elif operator == "between":
+        properties["min_value"] = _number(spec)
+        properties["max_value"] = _number(spec)
+    elif operator not in {"lower", "higher"}:
+        properties["value"] = {"type": "boolean"} if spec.type == "boolean" else _number(spec)
+    return _closed(properties)
 
 
-def raw_response_schema() -> dict[str, Any]:
+def _conditions(registry: Registry, *, soft: bool, model_only: bool) -> dict:
+    variants = [
+        _condition(spec, op, soft=soft)
+        for spec in registry.fields
+        if not model_only or spec.model_extractable
+        for op in (spec.soft_operators if soft else spec.hard_operators)
+    ]
+    return {"type": "array", "items": {"anyOf": variants} if variants else False}
+
+
+def _sort(registry: Registry) -> dict:
+    variants = [
+        _closed(
+            {
+                "field": {"type": "string", "const": spec.field},
+                "order": {"type": "string", "enum": list(spec.orders)},
+            }
+        )
+        for spec in registry.search.sort_fields
+    ]
+    return {"anyOf": [{"type": "null"}, *variants]}
+
+
+def search_state_schema(registry: Registry) -> dict[str, Any]:
+    return _closed(
+        {
+            "query_text": _nullable(_text(128)),
+            "hard_filters": _conditions(registry, soft=False, model_only=False),
+            "soft_preferences": _conditions(registry, soft=True, model_only=False),
+            "sort": _sort(registry),
+        }
+    )
+
+
+def search_patch_schema(registry: Registry) -> dict[str, Any]:
+    return _closed(
+        {
+            "schema_version": {"type": "string", "const": "1.0"},
+            "reset": {"type": "boolean"},
+            "query_text": _nullable(_text(128)),
+            "hard_filters": _conditions(registry, soft=False, model_only=True),
+            "soft_preferences": _conditions(registry, soft=True, model_only=True),
+            "sort": _sort(registry),
+            "clear_fields": {
+                "type": "array",
+                "uniqueItems": True,
+                "items": {"type": "string", "enum": sorted(registry.clearable_fields())},
+            },
+            "unmapped_terms": {
+                "type": "array",
+                "maxItems": 5,
+                "uniqueItems": True,
+                "items": _text(64),
+            },
+        }
+    )
+
+
+def raw_response_schema(registry: Registry) -> dict[str, Any]:
     schema = _closed(
         {
-            "id": {"type": "string", "minLength": 1},
-            "output_kind": {"type": "string", "enum": ["final", "tool_call"]},
-            "conversation_kind": {
-                "type": "string",
-                "enum": ["single_turn", "multi_turn"],
-            },
+            "id": _text(),
+            "scenario": {"type": "string", "enum": list(SCENARIO_CODES)},
             "tags": {
                 "type": "array",
-                "items": {
-                    "type": "string",
-                    "enum": [
-                        "追问",
-                        "工具调用",
-                        "最终 JSON",
-                        "确认",
-                        "无关",
-                        "相对时间",
-                        "多义短词",
-                        "多轮改口",
-                        "易混边界",
-                        "幻觉陷阱",
-                    ],
-                },
                 "minItems": 1,
+                "maxItems": 16,
+                "uniqueItems": True,
+                "items": _text(),
             },
             "input": {"$ref": "#/$defs/input"},
             "expected": {"$ref": "#/$defs/expected"},
-            "dpo_targets": {
+            "assertions": {
                 "type": "array",
-                "items": {
-                    "type": "string",
-                    "enum": ["P4", "P6", "P5", "P7", "P2P3"],
-                },
+                "uniqueItems": True,
+                "items": {"$ref": "#/$defs/assertion"},
             },
         }
     )
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$defs"] = {
-        "arguments": _arguments(),
-        "expected": {"anyOf": [_final(), _tool_call()]},
-        "history_item": _history_item(),
         "input": _closed(
-            {
-                "history": {
-                    "type": "array",
-                    "items": {"$ref": "#/$defs/history_item"},
-                },
-                "user_input": _nullable_string(),
-                "current_time": {"type": "string", "pattern": TIME_PATTERN},
-                "current_state": _state(),
-                "available_tools": {
-                    "type": "array",
-                    "items": {"type": "string", "const": "find_technicians"},
-                },
-            }
+            {"current_search_state": _nullable({"$ref": "#/$defs/state"}), "user_input": _text(512)}
         ),
+        "expected": search_patch_schema(registry),
+        "state": search_state_schema(registry),
+        "assertion": {
+            "anyOf": [
+                _closed(
+                    {
+                        "type": {"type": "string", "const": kind},
+                        "field": {
+                            "type": ["string", "null"],
+                            "enum": assertion_fields(kind, registry),
+                        },
+                    }
+                )
+                for kind in sorted(ASSERTION_TYPES)
+            ]
+        },
     }
-    return deepcopy(schema)
+    return schema

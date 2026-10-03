@@ -67,4 +67,33 @@ datasets:
     first_used_in: round-004
     retired_at: null
     notes: 最后一轮定向 SFT；0.6B 回退到 v0.3 核心后做最小修复，1.7B 保留 v0.4 并增加回归保护。
+  - dataset_id: baking-raw-v1.0
+    role: raw
+    status: planned
+    parent: null
+    path: data/raw/baking-v1.0/samples.jsonl
+    manifest: data/raw/baking-v1.0/manifest.json
+    registry: configs/catalog/registry.yaml
+    config: configs/data/baking_search_v1.yaml
+    first_used_in: null
+    notes: Task 06–07 的独立搜索版本；尚未生成正式语料，不作为已冻结数据。
+  - dataset_id: baking-sft-v1.0
+    role: training
+    status: planned
+    parent: baking-raw-v1.0
+    path: data/processed/sft/baking-v1.0/train.jsonl
+    validation_path: data/processed/sft/baking-v1.0/val.jsonl
+    manifest: data/processed/baking-v1.0/manifest.json
+    dataset_info: data/processed/baking-v1.0/dataset_info.json
+    registry: configs/catalog/registry.yaml
+    first_used_in: null
+    notes: Task 07 提供构建流水线；SFT only，正式产物生成与审核后再更新状态。
+  - dataset_id: baking-eval-v1.0
+    role: evaluation
+    status: planned
+    parent: null
+    path: data/eval/baking-v1.0/test.jsonl
+    registry: configs/catalog/registry.yaml
+    first_used_in: null
+    notes: 独立烘焙评估集预留；必须在正式训练语料生成前设计、审核并冻结。
 # 新数据版本必须新增条目，禁止修改旧版本文件来复用版本号。

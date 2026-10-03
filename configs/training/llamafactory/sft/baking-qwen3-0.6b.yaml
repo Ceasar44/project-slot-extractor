@@ -1,0 +1,12 @@
+run_id: baking-qwen3-0.6b
+model_name_or_path: Qwen/Qwen3-0.6B
+output_dir: models/adapters/baking-search-qwen3-0.6b-sft-v1
+dataset: baking_v1_0_train
+eval_dataset: baking_v1_0_val
+dataset_dir: data/processed/baking-v1.0
+# Registry + current state + gold must fit; run check_search_data before training.
+cutoff_len: 8192
+packing: false
+per_device_train_batch_size: 1
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 16

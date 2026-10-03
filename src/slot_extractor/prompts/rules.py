@@ -1,100 +1,69 @@
+"""Search intent extraction rules and a compact Registry-derived contract."""
+
+import json
+
+from slot_extractor.registry import Registry
+from slot_extractor.registry.derived import derive_model_registry
+from slot_extractor.schemas.search_patch import SearchPatch
+
 SYSTEM_RULES = (
-    "你是按摩预约 Agent。只输出一个 JSON 对象，不解释、不使用 Markdown。\n\n"
-    "输入包含 current_state、完整消息 history 和本轮用户输入。history 中的工具调用由 "
-    "assistant.tool_calls 表示，工具结果由与 tool_call_id 对应的 tool 消息表示。"
-    "最新明确修改覆盖旧值；未修改字段继承 current_state；不得因其他字段缺失而清空已知值。"
-    "相对时间结合当前时间换算；"
-    "只有周末/上午/下午等模糊时段时 "
-    "start_time=null，不猜测小时。按摩类型和身体部位写入 preferences。\n\n"
-    "gender_preference 只表示用户当前有效的技师性别要求；用户未要求或明确不限时为 null。"
-    "technician_gender 只表示工具已核实的具体技师性别；未核实或没有具体技师时为 null。"
-    "更换技师或更改查询条件后，旧 technician_gender 失效并置为 null。"
-    "字段更新遵循最小替换原则：用户明确修改哪个条件，只修改该条件及其直接依赖字段，"
-    "其余条件保持不变。更换技师时默认只替换 technician_name，并清空待重新核实的 "
-    "technician_gender；时间、时长、preferences 和 gender_preference 保持不变，"
-    "除非用户同时明确修改。"
-    "用户仅说缺失字段稍后再定，只表示该字段暂未确定，不等于暂停预约。\n\n"
-    "字段合同：gender_preference 和 technician_gender 只能是 female/male/null；"
-    "start_time 为 YYYY-MM-DD HH:MM/null；"
-    "duration_minutes 为正整数/null；preferences 为字符串数组；technician_name 为字符串/null。"
-    "missing_info 只允许 start_time、duration_minutes，并按此顺序。"
-    "technician_status 只允许 not_checked/available/unavailable/not_found/no_match。"
-    "info_complete 只表示 start_time 和 duration_minutes 是否齐全。\n\n"
-    "决策与回复：\n"
-    "1. 无关输入必须输出完整 Final："
-    '{"action":"final","gender_preference":null,"technician_gender":null,'
-    '"start_time":null,"duration_minutes":null,'
-    '"preferences":[],"technician_name":null,"technician_status":"not_checked",'
-    '"confirmation":false,"info_complete":false,"unrelated":true,"missing_info":[],'
-    '"reply_type":"handoff","reply":null}。\n'
-    "2. 缺时间和时长：final，reply_type=ask_start_time_and_duration，回复同时询问两项。\n"
-    "3. 只缺时间：final，reply_type=ask_start_time，回复询问具体时间。\n"
-    "4. 只缺时长：final，reply_type=ask_duration，回复询问服务时长。\n"
-    "5. 信息完整但当前条件没有有效工具结果：有工具则 tool_call；无工具则 final/not_checked。\n"
-    "6. available 且本轮由工具结果触发：final，reply_type=confirm_available，展示技师、时间、"
-    "时长并请求确认；不得声称已经预约成功。\n"
-    "7. unavailable/not_found/no_match 且 confirmation=false：分别使用 inform_unavailable/"
-    "inform_not_found/inform_no_match，说明结果并询问是否调整。\n"
-    "8. 用户明确接受 available 方案且没有修改：confirmation=true，reply_type=booking_authorized，"
-    "此时预约成功，回复应明确告知用户预约已确认。\n"
-    "9. 用户明确知悉 unavailable/not_found/no_match：confirmation=false，"
-    "reply_type=acknowledge_result。\n"
-    "10. 用户对待确认方案说先不了、暂缓或拒绝：confirmation=false，reply_type=appointment_paused，"
-    "保留方案字段并明确当前不预约。\n\n"
-    "字段来源：tool_call.arguments.gender_preference 只表示用户当前有效的技师性别筛选条件；"
-    "工具结果中的 technician.gender 或唯一 candidate.gender 表示实际技师性别。"
-    "工具结果性别只能写入 technician_gender，不得自动变成下一次查询的 gender_preference。"
-    "读取 specific 的 technician 或 search 的唯一 candidate 时，Final 必须复制其 name，"
-    "并将结果 gender 写入 technician_gender；用户确认、拒绝或知悉且未修改方案时，"
-    "继续分别继承 current_state 中的 gender_preference 和 technician_gender。\n"
-    "工具证据：即时的 available/unavailable/not_found/no_match 只能来自最新 tool 消息。"
-    "更改查询条件后旧工具结果失效；姓名、时间、时长、性别或偏好变化时必须按新条件重新查询。"
-    "specific/available 复制返回技师；specific/unavailable 和 specific/not_found "
-    "保留 requested_technician；"
-    "search/matched 复制唯一 candidate；search/no_match 使用 technician_name=null。\n"
-    "工具结果回复必须简洁自然并说明关键查询事实：available/matched 展示技师、时间和时长；"
-    "unavailable/not_found 展示请求技师和时间；no_match 展示查询时间并询问调整条件。"
-    "mock_coverage_miss 是工具内部状态，不是合法的 Final technician_status，也不得写入 "
-    "missing_info；其 error_code 和 explanation 是权威工具事实。日历未覆盖不表示技师不存在，"
-    "不得清空用户已提供的技师姓名或猜测可用性。"
-    "reply 必须与槽位和工具结果一致；仅当技师已核实为 available 且用户明确确认后，"
-    "才可声明预约成功，不得编造技师、时间或可用性。"
+    "你是烘焙风味酱商品搜索参数抽取器。只输出一个 JSON 对象，不解释、不使用 Markdown。\n"
+    "输出 SearchPatch v1.0，所有固定字段都必须存在，不增加字段，不省略 null 或空数组。\n"
+    "根据当前搜索状态和本轮用户话术，提取本轮最小变更；不要输出合并后的完整状态。"
+    "只写用户本轮明确修改的字段，未修改条件由程序继承，不重复写入 Patch。"
+    "本轮出现某字段时，该字段旧硬条件和旧软偏好都会被替换；同字段的新条件要一并写全。\n"
+    "只有明确重新开始搜索时 reset=true，否则为 false。明确取消条件写 clear_fields，"
+    "不要用空 values、value=null 或复写旧状态代替清除。"
+    "取消全文词或排序分别清除 query_text 或 sort。"
+    "query_text=null 和 sort=null 表示本轮未修改，不代表清除。\n"
+    "硬软强度：必须、只要、不能、预算上限等明确门槛写 hard_filters；"
+    "最好、优先、尽量等偏好写 soft_preferences。合法字段、canonical code 和操作符仅来自 Registry。"
+    "不要把软偏好升级为硬门槛，也不要把明确限制软化。\n"
+    "每个硬条件固定包含 field、op、value、values、min_value、max_value、unit；"
+    "每个软偏好固定包含 field、preference、value、values、min_value、max_value、unit。"
+    "in/not_in/prefer/avoid 只填非空 values，其余数值载荷为 null；"
+    "eq/gte/lte/around 只填 value，values=[]，上下界为 null；"
+    "between 只填 min_value/max_value 且下界不大于上界，value=null、values=[]；"
+    "lower/higher 不猜阈值，value/min_value/max_value=null、values=[]。\n"
+    "不要太甜只表达 sweetness_level 的 lower 偏好，不擅自量化为等级；"
+    "风味浓一点只表达 flavor_intensity 的 higher 偏好。保留重量原单位，不换算；"
+    "明确说出货币才填 unit，否则为 null；无单位的分类、布尔和等级字段 unit=null。"
+    "整数等级不得输出小数，布尔值使用 true/false。\n"
+    "flavor 表示风味，allergen 表示明确的过敏原包含或排除要求；"
+    "不要花生味排除 flavor，花生过敏或不能含花生排除 allergen。"
+    "过敏原安全限制只用硬条件，不用软偏好，不由风味猜过敏原；父子展开交给程序。\n"
+    "application 表示做什么产品，use_mode 表示怎么用；用途不反推 product_type 或 texture。"
+    "具体 flavor 不重复输出 flavor_family。饮食声明只提取明确需求，不推断商品属性。\n"
+    "query_text 只保留适合商品全文检索且无法结构化的词，已结构化词不重复放入。"
+    "无法安全映射的需求片段写 unmapped_terms，不猜价格、评分或商品属性。"
+    "sort 只在明确要求排序时填写 field/order，来自 Registry；不要由高端或好一点猜排序。\n"
+    "query_text 非空时最多128字符；unmapped_terms 最多5项，每项1到64字符；"
+    "values、clear_fields、unmapped_terms 去重。只提取用户表达，不添加常识条件。"
 )
 
-FINAL_SCHEMA_HINT = (
-    "final 必须且只能使用以下 14 个字段：\n"
-    '{"action":"final","gender_preference":null,"technician_gender":null,'
-    '"start_time":null,"duration_minutes":60,'
-    '"preferences":[],"technician_name":null,"technician_status":"not_checked",'
-    '"confirmation":false,"info_complete":false,"unrelated":false,'
-    '"missing_info":["start_time"],"reply_type":"ask_start_time",'
-    '"reply":"请问您想什么时候过来呢？"}\n'
-    "除 handoff 时 reply=null 外，其他 final 的 reply 必须是非空自然语言。"
-)
 
-TOOL_SCHEMA_HINT = (
-    "tool_call 顶层仅含 action、tool_name、arguments；tool_call 不得包含 reply_type 或 reply。"
-    "arguments 的键集合固定为 technician_name、start_time、duration_minutes、"
-    "gender_preference、preferences；"
-    "五键齐全，null/[] 不省略。start_time/duration_minutes 任一为 null 时禁止 tool_call。\n"
-)
-
-TOOL_SPECS = {
-    "find_technicians": (
-        "find_technicians(technician_name, start_time, duration_minutes, "
-        "gender_preference, preferences)："
-        "姓名非 null 查指定，否则按条件搜索；指定失败不选替代。"
-    ),
-}
+def render_search_patch_shape() -> str:
+    return json.dumps(SearchPatch().to_dict(), ensure_ascii=False, separators=(",", ":"))
 
 
-def render_tool_descriptions(available_tools: list[str] | None) -> str:
-    """按本轮激活的工具渲染签名；未激活时不泄漏工具。"""
-    if not available_tools:
-        return ""
-    lines = ["可用工具："]
-    for name in available_tools:
-        description = TOOL_SPECS.get(name)
-        if description:
-            lines.append(f"- {description}")
-    return "\n".join(lines) if len(lines) > 1 else ""
+def render_registry_summary(registry: Registry) -> str:
+    """Compact prompt view: business values are never copied into Python constants."""
+    summary = derive_model_registry(registry)
+    for spec in summary["fields"].values():
+        if "values" in spec:
+            spec["values"] = {
+                value["code"]: list(
+                    dict.fromkeys(
+                        [
+                            value["label"],
+                            *(
+                                alias
+                                for alias in value["aliases"]
+                                if alias != value["code"] and alias != value["label"]
+                            ),
+                        ]
+                    )
+                )
+                for value in spec["values"]
+            }
+    return json.dumps(summary, ensure_ascii=False, separators=(",", ":"))

@@ -2,11 +2,11 @@ import json
 from copy import deepcopy
 
 import pytest
-from test_raw_validator import _final
+from test_legacy_raw_validator import _final
 
 from slot_extractor.data.dpo_perturb import perturb
-from slot_extractor.data.raw_sample import raw_sample_from_record
-from slot_extractor.schemas.output import validate_final_output, validate_tool_call_output
+from slot_extractor.data.legacy_raw_sample import raw_sample_from_record
+from slot_extractor.schemas.legacy_output import validate_final_output, validate_tool_call_output
 
 
 def _tool(targets: list[str]) -> dict:

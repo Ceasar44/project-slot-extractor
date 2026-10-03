@@ -13,22 +13,24 @@ from slot_extractor.schemas.sample import load_samples
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Validate evaluation cases against the contract.")
-    parser.add_argument("--cases", default="data/eval/test.jsonl")
-    parser.add_argument("--contract", default="data/eval/dataset_contract.json")
+    parser = argparse.ArgumentParser(description="Validate baking search cases against Registry.")
+    parser.add_argument("--cases", default="data/eval/baking-v1.0/test.jsonl")
+    parser.add_argument("--contract", default="configs/catalog/registry.yaml")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    samples = load_samples(Path(args.cases))
-    contract = load_dataset_contract(Path(args.contract))
     try:
+        contract = load_dataset_contract(Path(args.contract))
+        samples = load_samples(Path(args.cases), contract)
+        if not samples:
+            raise DatasetContractError("search dataset must be nonempty")
         validate_dataset_against_contract(samples, contract)
-    except DatasetContractError as exc:
+    except (ValueError, OSError) as exc:
         print(exc, file=sys.stderr)
         return 1
-    print(f"Validated {len(samples)} cases against contract v{contract['version']}.")
+    print(f"Validated {len(samples)} search cases against Registry {contract.registry_version}.")
     return 0
 
 

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>烘焙搜索 · 双模型对比</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header><a href="/" class="brand"><span class="brand-mark">S</span><span>烘焙搜索<small>SearchPatch · 双模型对比</small></span></a><span id="environment">本地实验台</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">SEARCH INTENT LAB</p><h1>同一句需求，<br>对照两种理解。</h1></div><p>观察搜索条件如何被提取、校验和合并。<br>左右状态独立保存，便于连续测试替换、清除与重置。</p></section>
+    <div class="workspace">
+      <aside class="controls">
+        <h2><span>01</span>输入搜索需求</h2>
+        <label for="user-input">本轮用户原话</label>
+        <textarea id="user-input" rows="5" maxlength="512" placeholder="做可颂夹心，最好开心果味，不要太甜，20美元以内"></textarea>
+        <div class="examples"><button type="button" data-example="做可颂夹心，最好开心果味，不要太甜，20美元以内">条件组合</button><button type="button" data-example="口味改成抹茶优先，但不能含花生">多轮替换</button><button type="button" data-example="价格不限了">取消预算</button></div>
+        <label for="comparison-mode">运行方式</label>
+        <select id="comparison-mode"><option value="sequential">顺序运行</option><option value="parallel">并行运行</option></select>
+        <p class="hint" id="mode-note">顺序运行便于比较本次推理延迟。</p>
+        <button type="button" id="run" class="primary" disabled>运行对比 <span>↗</span></button>
+        <p id="run-status" role="status" aria-live="polite">选择并加载左右模型后开始。</p>
+        <div class="actions"><button type="button" id="reset-states">清空两侧状态</button><button type="button" id="sync-state">右侧使用左侧状态</button></div>
+        <div class="actions export"><button type="button" id="export-json">导出 JSON</button><button type="button" id="export-ndjson">导出 NDJSON</button></div>
+        <details class="registry"><summary>字段合同 <span id="registry-version"></span></summary><div id="registry-fields"></div><p id="currency-note" class="hint"></p></details>
+        <p class="boundary">这里只展示搜索参数，不请求商品列表。</p>
+      </aside>
+      <section class="comparison" aria-label="左右模型对比">
+        <div class="comparison-heading"><h2><span>02</span>提取结果</h2><span id="state-comparison" class="badge">两侧状态相同</span></div>
+        <div class="lanes">
+          <article class="lane" id="left-lane">
+            <div class="lane-heading"><span class="letter">A</span><h3>左侧模型</h3></div>
+            <label class="sr-only" for="left-model">左侧模型</label><select id="left-model"></select>
+            <div class="model-actions"><button type="button" id="left-load">加载模型</button><button type="button" id="left-unload">卸载</button></div>
+            <p id="left-status" class="side-status" role="status" aria-live="polite">等待加载</p>
+            <details class="state-editor"><summary>当前搜索状态 · 可编辑</summary><label class="sr-only" for="left-state">左侧当前搜索状态 JSON</label><textarea id="left-state" rows="8" spellcheck="false" placeholder="null（从空状态开始）"></textarea></details>
+            <p id="left-metrics" class="metrics">时延与 token 信息将在推理后显示</p>
+            <div id="left-trace" class="trace"><p class="empty">原始输出 → Patch → 校验<br>合并状态 → 编译查询</p></div>
+          </article>
+          <article class="lane" id="right-lane">
+            <div class="lane-heading"><span class="letter">B</span><h3>右侧模型</h3></div>
+            <label class="sr-only" for="right-model">右侧模型</label><select id="right-model"></select>
+            <div class="model-actions"><button type="button" id="right-load">加载模型</button><button type="button" id="right-unload">卸载</button></div>
+            <p id="right-status" class="side-status" role="status" aria-live="polite">等待加载</p>
+            <details class="state-editor"><summary>当前搜索状态 · 可编辑</summary><label class="sr-only" for="right-state">右侧当前搜索状态 JSON</label><textarea id="right-state" rows="8" spellcheck="false" placeholder="null（从空状态开始）"></textarea></details>
+            <p id="right-metrics" class="metrics">时延与 token 信息将在推理后显示</p>
+            <div id="right-trace" class="trace"><p class="empty">原始输出 → Patch → 校验<br>合并状态 → 编译查询</p></div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

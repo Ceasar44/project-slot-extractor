@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from slot_extractor.schemas.output import validate_final_output
+from slot_extractor.schemas.legacy_output import validate_final_output
 from slot_extractor.schemas.results import GenerationResult
 from slot_extractor.tool_loop.find_technicians import FindTechniciansExecutor
 from slot_extractor.tool_loop.fixture_store import FixtureStore

@@ -1,8 +1,8 @@
 import json
 
-from slot_extractor.evaluation.scorers.reply_semantic import ReplySemanticScorer
+from slot_extractor.evaluation.legacy_scorers.reply_semantic import ReplySemanticScorer
+from slot_extractor.schemas.legacy_sample import ReplyExpectations, Sample
 from slot_extractor.schemas.results import GenerationResult
-from slot_extractor.schemas.sample import ReplyExpectations, Sample
 
 
 def _sample() -> Sample:

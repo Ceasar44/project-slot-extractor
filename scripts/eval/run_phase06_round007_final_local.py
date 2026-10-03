@@ -15,8 +15,8 @@ from typing import Any
 
 from scripts.eval.run_phase06_llamacpp import stop, wait_ready
 from slot_extractor.inference.llama_server import LlamaServerBackend, LlamaServerConfig
-from slot_extractor.prompts.template import PromptBuilder
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.prompts.legacy_template import LegacyPromptBuilder as PromptBuilder
+from slot_extractor.schemas.legacy_sample import load_samples
 
 MODELS = {
     "Q8_0": Path("models/gguf/phase06-round006-local/r004-qwen3-0.6b-sft-Q8_0.gguf"),

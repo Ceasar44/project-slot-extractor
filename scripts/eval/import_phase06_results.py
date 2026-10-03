@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any
 
 from scripts.eval.phase04_artifacts import write_phase04_artifacts
-from slot_extractor.evaluation.runner import default_scorers
-from slot_extractor.evaluation.scenarios import aggregate_scenario_slices
-from slot_extractor.evaluation.scorecard import aggregate_scorecard, summarize_timing
-from slot_extractor.schemas.results import CaseResult, GenerationResult
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.evaluation.legacy_runner import default_scorers
+from slot_extractor.evaluation.legacy_scenarios import aggregate_scenario_slices
+from slot_extractor.evaluation.legacy_scorecard import aggregate_scorecard, summarize_timing
+from slot_extractor.schemas.legacy_sample import load_samples
+from slot_extractor.schemas.results import GenerationResult
+from slot_extractor.schemas.results import LegacyCaseResult as CaseResult
 
 DEFAULT_ROUND_ID = "round-001"
 

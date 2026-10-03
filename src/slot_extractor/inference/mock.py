@@ -31,6 +31,13 @@ class MockBackend:
             joined = "\n".join(str(m.get("content", "")) for m in messages)
             match = re.search(r"Sample ID:\s*([^\n]+)", joined)
             sample_id = match.group(1).strip() if match else ""
+        if not sample_id:
+            # Search prompts intentionally omit sample IDs and all dataset metadata.
+            user_text = next(
+                (m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), ""
+            )
+            if isinstance(user_text, str) and user_text in self._responses:
+                sample_id = user_text
         if sample_id not in self._responses:
             raise ValueError(f"mock response not configured for sample id: {sample_id}")
         response = self._responses[sample_id]

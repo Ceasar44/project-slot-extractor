@@ -6,21 +6,20 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from slot_extractor.inference.base import Backend
-from slot_extractor.prompts.rules import (
+from slot_extractor.prompts.legacy_rules import (
     FINAL_SCHEMA_HINT,
     SYSTEM_RULES,
     TOOL_SCHEMA_HINT,
     render_tool_descriptions,
 )
-from slot_extractor.schemas.output import (
-    parse_model_json,
+from slot_extractor.schemas.legacy_output import (
     validate_final_output,
     validate_tool_call_output,
 )
+from slot_extractor.schemas.output import parse_model_json
 
 from .find_technicians import FindTechniciansExecutor
 from .models import CanonicalToolResult, ToolLoopEvent, ToolQuery
-
 
 _RELATIVE_DAY_OFFSETS = {"今天": 0, "明天": 1, "后天": 2}
 _CHINESE_HOURS = {
@@ -250,7 +249,11 @@ class ConversationOrchestrator:
                 if result.status == "mock_coverage_miss":
                     final = _coverage_miss_final(query, result)
                     validate_final_output(final)
-                    events.append(ToolLoopEvent(len(events), "reply", {"reply": final["reply"], "final": final}))
+                    events.append(
+                        ToolLoopEvent(
+                            len(events), "reply", {"reply": final["reply"], "final": final}
+                        )
+                    )
                     events.append(ToolLoopEvent(len(events), "complete", {}))
                     return OrchestrationResult(tuple(events), final, None)
                 if (
@@ -260,7 +263,11 @@ class ConversationOrchestrator:
                 ):
                     final = _unique_match_final(query, result)
                     validate_final_output(final)
-                    events.append(ToolLoopEvent(len(events), "reply", {"reply": final["reply"], "final": final}))
+                    events.append(
+                        ToolLoopEvent(
+                            len(events), "reply", {"reply": final["reply"], "final": final}
+                        )
+                    )
                     events.append(ToolLoopEvent(len(events), "complete", {}))
                     return OrchestrationResult(tuple(events), final, None)
                 messages.extend(

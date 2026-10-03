@@ -1,0 +1,32 @@
+dataset_id: baking-raw-v1.0
+registry_path: configs/catalog/registry.yaml
+output_dir: data/raw/baking-v1.0
+output_root: data
+version: baking-v1.0
+enable_dpo: false
+val_fraction: 0.1
+eval_path: data/eval/baking-v1.0/test.jsonl
+split: train
+seed: 42
+generation_concurrency: 5
+max_attempts: 3
+generate_inference_config: configs/inference/openai_responses_gpt_5.6_sol.yaml
+# Shared by Raw generation and SFT build; no DPO targets in this configuration.
+counts:
+  single_filter: 120
+  multi_filter: 200
+  hard_soft_mix: 220
+  negation: 150
+  allergy_vs_flavor: 180
+  replace: 180
+  clear: 120
+  preserve_state: 150
+  numeric_price: 120
+  numeric_size: 80
+  relative_numeric: 80
+  sort: 60
+  query_text: 40
+  unmapped: 80
+  reset: 40
+# Default audit requires all scenarios, all Registry fields and key capabilities.
+# It also reports per-field hard/soft operators and user units for Gold review.

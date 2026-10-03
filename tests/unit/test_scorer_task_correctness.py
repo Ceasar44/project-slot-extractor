@@ -1,8 +1,8 @@
 import json
 
-from slot_extractor.evaluation.scorers.task_correctness import TaskCorrectnessScorer
+from slot_extractor.evaluation.legacy_scorers.task_correctness import TaskCorrectnessScorer
+from slot_extractor.schemas.legacy_sample import ReplyExpectations, Sample
 from slot_extractor.schemas.results import GenerationResult
-from slot_extractor.schemas.sample import ReplyExpectations, Sample
 
 
 def _result(output: dict) -> GenerationResult:

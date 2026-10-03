@@ -1,8 +1,8 @@
 from pathlib import Path
 
 from scripts.eval.run_phase06_round008_local import CompactPromptBuilder
-from slot_extractor.prompts.template import PromptBuilder
-from slot_extractor.schemas.sample import load_samples
+from slot_extractor.prompts.legacy_template import LegacyPromptBuilder as PromptBuilder
+from slot_extractor.schemas.legacy_sample import load_samples
 
 
 def test_compact_prompt_is_materially_shorter() -> None:

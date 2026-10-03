@@ -1,108 +1,78 @@
-from __future__ import annotations
+"""Search generation instructions sharing the raw contract vocabulary."""
 
 from dataclasses import dataclass
+
+from slot_extractor.schemas.dataset_contract import SCENARIO_CODES
 
 
 @dataclass(frozen=True)
 class ScenarioSpec:
-    category: str
     instruction: str
+    example: str
+    multi_turn: bool = False
 
 
 SCENARIOS = {
-    "ask_missing_time": ScenarioSpec("追问", "仅缺 start_time，输出 ask_start_time。"),
-    "ask_missing_duration": ScenarioSpec("追问", "仅缺 duration_minutes，输出 ask_duration。"),
-    "ask_missing_both": ScenarioSpec(
-        "追问", "同时缺时间和时长，输出 ask_start_time_and_duration。"
+    "single_filter": ScenarioSpec(
+        "单轮仅提取一个条件，覆盖不同字段及中英文别名，不附加常识条件。", "想要开心果味的"
     ),
-    "ask_multi_change_time": ScenarioSpec(
-        "追问", "多轮场景：用户改口但新时间仍含糊；继承时长，仅追问时间。"
+    "multi_filter": ScenarioSpec(
+        "单轮至少两个硬条件，区分制作对象、使用方式与商品形态。", "可颂夹心用，20美元以内"
     ),
-    "ask_multi_change_duration": ScenarioSpec(
-        "追问", "多轮场景：用户改时长但表达含糊；继承时间，仅追问时长。"
+    "hard_soft_mix": ScenarioSpec(
+        "同时包含硬条件与软偏好，强度忠实原话；模糊甜度不硬量化。",
+        "做可颂夹馅，20美元以内，最好开心果，不要太甜",
     ),
-    "tool_general": ScenarioSpec("工具调用", "信息完整、未指定姓名，调用工具做一般查询。"),
-    "tool_specific": ScenarioSpec("工具调用", "信息完整且指定技师姓名，调用工具查询该技师。"),
-    "tool_replace_technician": ScenarioSpec(
-        "工具调用",
-        "多轮最小替换：current_state 有旧技师和完整时间时长；用户只要求换成新技师。"
-        "arguments 只替换 technician_name，时间、时长、偏好保持不变；旧 technician_gender"
-        "不得作为新技师性别条件继承。",
+    "negation": ScenarioSpec(
+        "覆盖硬排除 not_in 与软回避 avoid，不将普通口味排除猜成过敏。", "不要花生味"
     ),
-    "tool_retry_unavailable": ScenarioSpec(
-        "工具调用", "多轮：上一位技师 unavailable，用户要求换一位；继承时间时长重新查询。"
+    "allergy_vs_flavor": ScenarioSpec(
+        "交替生成过敏安全限制与普通风味排除；allergen 只用硬条件。"
+        "不要花生味只排除 flavor；花生过敏只排除 allergen，不展开父子关系。",
+        "花生过敏，但想要巧克力味",
     ),
-    "tool_retry_no_match": ScenarioSpec(
-        "工具调用", "多轮：上次 no_match，用户放宽偏好条件后重新调用工具。"
+    "replace": ScenarioSpec(
+        "提供有旧条件的状态，新意图整体替换同字段旧 hard/soft；只写修改字段。",
+        "口味改成抹茶优先，预算提高到30美元",
+        True,
     ),
-    "final_available": ScenarioSpec(
-        "最终 JSON", "工具返回 available，输出 confirm_available，姓名必须来自工具结果。"
+    "clear": ScenarioSpec(
+        "提供有旧条件的状态；明确取消限制使用 clear_fields，不把换口味当清除。",
+        "价格不限了，排序也不用了",
+        True,
     ),
-    "final_unavailable": ScenarioSpec(
-        "最终 JSON",
-        "工具返回 unavailable，输出 technician_status=unavailable 和 inform_unavailable。",
+    "preserve_state": ScenarioSpec(
+        "提供至少两个已有字段，仅修改其中一项；未修改字段只存在于状态，不重复进 Patch。",
+        "其他不变，口味换成抹茶",
+        True,
     ),
-    "final_not_found": ScenarioSpec(
-        "最终 JSON",
-        "指定技师未找到，输出 technician_status=not_found、姓名 null 和 inform_not_found。",
+    "numeric_price": ScenarioSpec(
+        "覆盖 eq/gte/lte/between、零价格、显式币种及省略币种；不猜币种，不换汇。",
+        "预算在15到25美元之间",
     ),
-    "final_no_match": ScenarioSpec(
-        "最终 JSON",
-        "没有符合条件的技师，输出 technician_status=no_match、姓名 null 和 inform_no_match。",
+    "numeric_size": ScenarioSpec("覆盖 g/kg/oz 及比较符；保留原单位，不换算成克。", "至少1公斤装"),
+    "relative_numeric": ScenarioSpec(
+        "覆盖 lower/higher/around 软偏好；不要太甜不猜阈值，价格低一点不猜预算。",
+        "风味浓一点，不要太甜，8oz左右",
     ),
-    "final_available_preferences": ScenarioSpec(
-        "最终 JSON", "带非空偏好查询成功，输出 available 和 confirm_available。"
+    "sort": ScenarioSpec(
+        "只提取明确排序，字段和方向从 Registry 选择；高端一点不能猜成价格降序。",
+        "按价格从低到高排列",
     ),
-    "confirm_accept": ScenarioSpec(
-        "确认", "用户明确接受预约，输出 confirmation=true 和 booking_authorized。"
+    "query_text": ScenarioSpec(
+        "保留不能结构化但适合商品全文检索的词；结构化词不重复进 query_text。",
+        "找 Dubai Chocolate 风格的",
     ),
-    "confirm_reject": ScenarioSpec(
-        "确认",
-        "用户明确拒绝或说先不了，保持信息完整但 confirmation=false，输出 appointment_paused。",
+    "unmapped": ScenarioSpec(
+        "无法安全映射的需求原文进入 unmapped_terms；不猜字段、取值、过滤或排序。",
+        "开心果味的，整体高级一点",
     ),
-    "acknowledge_unavailable": ScenarioSpec(
-        "确认",
-        "多轮：助手已告知 unavailable，用户说知道了；"
-        "输出 confirmation=false 和 acknowledge_result。",
-    ),
-    "acknowledge_not_found": ScenarioSpec(
-        "确认",
-        "多轮：助手已告知 not_found，用户表示知悉；输出 confirmation=false 和 acknowledge_result。",
-    ),
-    "acknowledge_no_match": ScenarioSpec(
-        "确认",
-        "多轮：助手已告知 no_match，用户表示知悉；输出 confirmation=false 和 acknowledge_result。",
-    ),
-    "unrelated_product": ScenarioSpec("无关", "用户询问店内设备品牌，按 unrelated/handoff 处理。"),
-    "unrelated_price": ScenarioSpec(
-        "无关", "用户询问与预约抽槽无关的价格政策，按 unrelated/handoff 处理。"
-    ),
-    "unrelated_privacy": ScenarioSpec("无关", "用户索要技师私人信息，按 unrelated/handoff 处理。"),
-    "unrelated_policy": ScenarioSpec("无关", "用户询问门店管理政策，按 unrelated/handoff 处理。"),
-    "unrelated_chitchat": ScenarioSpec(
-        "无关", "用户闲聊或提出越界问题，按 unrelated/handoff 处理。"
+    "reset": ScenarioSpec(
+        "提供已有状态，用户明确从头搜索；reset=true，丢弃旧状态后只提取新需求。",
+        "前面的都不要了，重新找草莓味的",
+        True,
     ),
 }
 
-
-def scenarios_by_category() -> dict[str, list[str]]:
-    result: dict[str, list[str]] = {}
-    for name, spec in SCENARIOS.items():
-        result.setdefault(spec.category, []).append(name)
-    return result
-
-
-def scenario_dpo_targets(name: str) -> tuple[str, ...]:
-    if name.startswith("ask_"):
-        return ("P7",)
-    if name.startswith("tool_"):
-        return ("P6", "P2P3")
-    if name in {"final_available", "final_available_preferences"}:
-        return ("P4",)
-    if name.startswith("final_"):
-        return ("P4", "P2P3")
-    if name == "confirm_accept":
-        return ("P5",)
-    if name.startswith("unrelated_"):
-        return ("P5", "P6")
-    return ()
+if set(SCENARIOS) != set(SCENARIO_CODES):
+    raise RuntimeError("generation scenarios differ from the raw contract")

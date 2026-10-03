@@ -7,10 +7,10 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 
-from slot_extractor.data.fake_names import FAKE_NAMES
-from slot_extractor.data.raw_sample import RawSample
-from slot_extractor.data.sft_render import compact_json, render_sft
-from slot_extractor.schemas.output import validate_final_output, validate_tool_call_output
+from slot_extractor.data.legacy_fake_names import FAKE_NAMES
+from slot_extractor.data.legacy_raw_sample import RawSample
+from slot_extractor.data.legacy_sft_render import compact_json, render_sft
+from slot_extractor.schemas.legacy_output import validate_final_output, validate_tool_call_output
 
 
 class PerturbationError(ValueError):

@@ -11,15 +11,15 @@ from pathlib import Path
 from typing import Any
 
 from scripts.eval.run_phase06_llamacpp import stop, wait_ready
-from slot_extractor.evaluation.runner import default_scorers
+from slot_extractor.evaluation.legacy_runner import default_scorers
 from slot_extractor.inference.llama_server import LlamaServerBackend, LlamaServerConfig
-from slot_extractor.prompts.rules import (
+from slot_extractor.prompts.legacy_rules import (
     FINAL_SCHEMA_HINT,
     TOOL_SCHEMA_HINT,
     render_tool_descriptions,
 )
-from slot_extractor.prompts.template import PromptBuilder
-from slot_extractor.schemas.sample import Sample, load_samples
+from slot_extractor.prompts.legacy_template import LegacyPromptBuilder as PromptBuilder
+from slot_extractor.schemas.legacy_sample import Sample, load_samples
 
 MODEL = Path("models/gguf/phase06-round006-local/r004-qwen3-0.6b-sft-Q4_K_M.gguf")
 SERVER = Path("deployment/llama_cpp/bin/llama-server.exe")

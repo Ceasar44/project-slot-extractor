@@ -1,9 +1,9 @@
-from slot_extractor.evaluation.scorers.reply_faithfulness import (
+from slot_extractor.evaluation.legacy_scorers.reply_faithfulness import (
     ReplyFaithfulnessScorer,
     _mentioned_technicians,
 )
+from slot_extractor.schemas.legacy_sample import ReplyExpectations, Sample
 from slot_extractor.schemas.results import GenerationResult
-from slot_extractor.schemas.sample import ReplyExpectations, Sample
 
 
 def test_generic_gender_phrase_is_not_treated_as_technician_name() -> None:

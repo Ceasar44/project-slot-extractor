@@ -1,52 +1,20 @@
+from search_dataset_helpers import multi_record, record, registry
+
+from slot_extractor.data.raw_sample import raw_sample_from_record
 from slot_extractor.evaluation.scenarios import aggregate_scenario_slices, scenario_labels
-from slot_extractor.schemas.sample import Sample
+from slot_extractor.schemas.results import CaseResult, DimensionScore
 
 
-def _sample(**updates: object) -> Sample:
-    expected = {
-        "action": "final",
-        "info_complete": True,
-        "unrelated": False,
-        "confirmation": False,
-    }
-    expected.update(updates.pop("expected", {}))
-    input_obj = {"history": []}
-    input_obj.update(updates.pop("input", {}))
-    return Sample(
-        id=str(updates.pop("id", "case")),
-        output_kind=updates.pop("output_kind", "final"),
-        conversation_kind=updates.pop("conversation_kind", "single_turn"),
-        input=input_obj,
-        expected=expected,
-        assertions=[],
-        tags=[],
-    )
-
-
-def test_scenario_labels_are_non_scoring_slices() -> None:
-    sample = _sample(
-        conversation_kind="multi_turn",
-        input={
-            "history": [
-                {"role": "user", "content": "预约"},
-                {"role": "tool", "tool_call_id": "call-1", "content": "{}"},
-            ]
-        },
-        expected={"info_complete": False, "missing_info": ["duration_minutes"], "unrelated": True, "confirmation": True},
-    )
-
-    assert scenario_labels(sample) == {
-        "confirmation",
-        "missing_information",
-        "multi_turn",
-        "tool_result",
-        "unrelated",
-    }
-
-
-def test_aggregate_scenario_slices_averages_task_scores() -> None:
-    samples = [_sample(id="a", expected={"unrelated": True}), _sample(id="b", expected={"unrelated": True})]
-
-    slices = aggregate_scenario_slices(samples, {"a": 1.0, "b": 0.5})
-
-    assert slices["unrelated"] == {"count": 2, "task_correctness": 0.75}
+def test_scenario_tags_are_distinct_and_na_is_excluded_from_metric_denominator():
+    first, second = record(), multi_record()
+    first["id"], second["id"] = "a", "b"
+    samples = [raw_sample_from_record(i, registry()) for i in (first, second)]
+    assert "scenario:replace" in scenario_labels(samples[1])
+    assert "tag:multi_turn" in scenario_labels(samples[1])
+    rows = [
+        CaseResult("a", "", {"negation": DimensionScore("negation", None, None, "n/a")}),
+        CaseResult("b", "", {"negation": DimensionScore("negation", 0.0, False, "wrong")}),
+    ]
+    slices = aggregate_scenario_slices(samples, rows)
+    assert slices["tag:flavor"]["count"] == 2
+    assert slices["tag:flavor"]["metrics"]["negation"] == {"score": 0, "applicable_count": 1}

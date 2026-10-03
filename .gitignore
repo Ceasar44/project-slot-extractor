@@ -135,3 +135,6 @@ deployment/llama_cpp/bin/*
 # Logs
 *.log
 logs/
+
+# Workspace-only test dependencies and temporary validation outputs
+.tmp/

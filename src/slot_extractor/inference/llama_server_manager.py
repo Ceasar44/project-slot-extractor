@@ -70,7 +70,12 @@ class LlamaServerManager:
             log.close()
             raise ServerError(f"cannot start llama-server: {exc}") from exc
         self._logs[id(process)] = log
-        self._expected_models[id(process)] = str(spec.artifact_path).replace("/", "\\").lower()
+        expected = str(spec.artifact_path)
+        for flag in ("--alias", "-a"):
+            if flag in spec.server_args:
+                expected = spec.server_args[spec.server_args.index(flag) + 1]
+                break
+        self._expected_models[id(process)] = expected.replace("/", "\\").lower()
         return process
 
     def wait_ready(self, process: subprocess.Popen[str], timeout_s: float) -> None:

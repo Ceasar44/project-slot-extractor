@@ -1,73 +1,71 @@
-from __future__ import annotations
+"""Coverage counts do not prove natural-language correctness."""
 
-from collections.abc import Iterable
+from collections import Counter
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from slot_extractor.data.raw_sample import RawSample
-
-REQUIRED_NEGATIVE_STATUSES = {"unavailable", "not_found", "no_match"}
-REQUIRED_REPLY_TYPES = {
-    "inform_unavailable",
-    "inform_not_found",
-    "inform_no_match",
-    "acknowledge_result",
-}
+from slot_extractor.data.tag_audit import derive_tags
+from slot_extractor.registry import Registry
+from slot_extractor.schemas.dataset_contract import SCENARIO_CODES
+from slot_extractor.schemas.sample import Sample
 
 
 @dataclass(frozen=True)
 class SemanticCoverageReport:
-    missing_statuses: set[str]
-    missing_reply_types: set[str]
-    missing_confirmation_false: bool
-    missing_minimal_technician_replacement: bool
+    sample_count: int
+    scenarios: dict[str, int]
+    fields: dict[str, int]
+    operators: dict[str, int]
+    units: dict[str, int]
+    capabilities: dict[str, int]
+    deficits: dict[str, int]
 
     @property
     def ok(self) -> bool:
-        return not (
-            self.missing_statuses
-            or self.missing_reply_types
-            or self.missing_confirmation_false
-            or self.missing_minimal_technician_replacement
+        return not self.deficits
+
+
+def audit_semantic_coverage(
+    samples: Iterable[Sample],
+    registry: Registry,
+    minimums: Mapping[str, Mapping[str, int]] | None = None,
+) -> SemanticCoverageReport:
+    counts = {
+        key: Counter() for key in ("scenarios", "fields", "operators", "units", "capabilities")
+    }
+    total = 0
+    for sample in samples:
+        total += 1
+        counts["scenarios"][sample.scenario] += 1
+        counts["capabilities"].update(derive_tags(sample.to_dict(), registry))
+        patch = sample.expected
+        counts["fields"].update(
+            {f["field"] for f in patch["hard_filters"] + patch["soft_preferences"]}
+            | set(patch["clear_fields"])
         )
-
-
-def _is_minimal_replacement(sample: RawSample) -> bool:
-    state = sample.input.get("current_state")
-    if sample.expected.get("action") != "tool_call" or not isinstance(state, dict):
-        return False
-    arguments = sample.expected.get("arguments")
-    if not isinstance(arguments, dict):
-        return False
-    old_name = state.get("technician_name")
-    new_name = arguments.get("technician_name")
-    if not old_name or not new_name or old_name == new_name:
-        return False
-    inherited = ("start_time", "duration_minutes", "preferences", "gender_preference")
-    return all(arguments.get(field) == state.get(field) for field in inherited)
-
-
-def audit_semantic_coverage(samples: Iterable[RawSample]) -> SemanticCoverageReport:
-    items = list(samples)
-    statuses = {
-        str(sample.expected.get("technician_status"))
-        for sample in items
-        if sample.expected.get("action") == "final"
-    }
-    reply_types = {
-        str(sample.expected.get("reply_type"))
-        for sample in items
-        if sample.expected.get("action") == "final"
-    }
-    has_negative_confirmation = any(
-        sample.expected.get("confirmation") is False
-        and sample.expected.get("reply_type") in {"appointment_paused", "acknowledge_result"}
-        for sample in items
-    )
+        for kind, key in (("hard_filters", "op"), ("soft_preferences", "preference")):
+            prefix = "hard" if kind == "hard_filters" else "soft"
+            for item in patch[kind]:
+                counts["operators"][f"{prefix}:{item['field']}:{item[key]}"] += 1
+                if item["unit"] is not None:
+                    counts["units"][f"{item['field']}:{item['unit']}"] += 1
+    if minimums is None:
+        minimums = {
+            "scenarios": dict.fromkeys(SCENARIO_CODES, 1),
+            "fields": dict.fromkeys(registry.model_extractable_fields(), 1),
+            "capabilities": dict.fromkeys(
+                ("hard", "soft", "negation", "allergen", "replace", "clear", "preserve_state"), 1
+            ),
+        }
+    deficits = {}
+    for group, requirements in minimums.items():
+        if group not in counts or not isinstance(requirements, Mapping):
+            raise ValueError(f"unknown coverage group: {group}")
+        for name, minimum in requirements.items():
+            if type(minimum) is not int or minimum < 0:
+                raise ValueError("coverage minimum must be a nonnegative integer")
+            if (missing := minimum - counts[group][name]) > 0:
+                deficits[f"{group}:{name}"] = missing
     return SemanticCoverageReport(
-        missing_statuses=REQUIRED_NEGATIVE_STATUSES - statuses,
-        missing_reply_types=REQUIRED_REPLY_TYPES - reply_types,
-        missing_confirmation_false=not has_negative_confirmation,
-        missing_minimal_technician_replacement=not any(
-            _is_minimal_replacement(sample) for sample in items
-        ),
+        total, **{k: dict(sorted(v.items())) for k, v in counts.items()}, deficits=deficits
     )

@@ -1,9 +1,9 @@
-from slot_extractor.evaluation.scorers.preferences import (
+from slot_extractor.evaluation.legacy_scorers.preferences import (
     PreferenceMatcher,
     PreferenceSemanticScorer,
 )
+from slot_extractor.schemas.legacy_sample import Sample
 from slot_extractor.schemas.results import GenerationResult
-from slot_extractor.schemas.sample import Sample
 
 
 class _FakeEmbedder:
