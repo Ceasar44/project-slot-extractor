@@ -9,6 +9,7 @@ import yaml
 from slot_extractor.inference.base import Backend
 from slot_extractor.inference.llama_server import LlamaServerBackend, LlamaServerConfig
 from slot_extractor.inference.mock import MockBackend, mock_response_from_config
+from slot_extractor.inference.openai_chat import OpenAIChatBackend, OpenAIChatConfig
 from slot_extractor.inference.openai_responses import (
     OpenAIResponsesBackend,
     OpenAIResponsesConfig,
@@ -39,18 +40,24 @@ def build_backend_from_config(path: str | Path) -> Backend:
             )
         )
 
-    if backend == "openai_responses":
+    if backend in {"openai_responses", "openai_chat"}:
         base_url = config.get("base_url") or os.environ[config["base_url_env"]]
         api_key = config.get("api_key") or os.environ[config["api_key_env"]]
         temperature = config.get("temperature")
-        return OpenAIResponsesBackend(
-            OpenAIResponsesConfig(
+        backend_class = OpenAIChatBackend if backend == "openai_chat" else OpenAIResponsesBackend
+        config_class = OpenAIChatConfig if backend == "openai_chat" else OpenAIResponsesConfig
+        return backend_class(
+            config_class(
                 model=config["model"],
                 base_url=base_url,
                 api_key=api_key,
                 timeout_s=float(config.get("timeout_s", 180)),
                 temperature=None if temperature is None else float(temperature),
                 max_tokens=int(config.get("max_tokens", 512)),
+                **({
+                    "reasoning": config.get("reasoning"),
+                    "max_retry_tokens": int(config.get("max_retry_tokens", 16384)),
+                } if backend == "openai_chat" else {}),
             )
         )
 

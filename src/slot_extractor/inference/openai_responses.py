@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -8,6 +9,10 @@ import httpx
 
 from slot_extractor.inference.base import GenerationParams
 from slot_extractor.schemas.results import GenerationResult
+
+
+class EmptyResponseError(ValueError):
+    """A response has no usable assistant text and may be retried."""
 
 
 @dataclass(frozen=True)
@@ -54,22 +59,32 @@ def _responses_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _response_text(payload: dict[str, Any]) -> str:
+    if payload.get("status") == "failed" or payload.get("error"):
+        error = json.dumps(payload.get("error"), ensure_ascii=False)
+        raise ValueError(
+            f"Responses API failed: status={payload.get('status')}, "
+            f"id={payload.get('id')}, error={error[:4000]}"
+        )
     output_text = payload.get("output_text")
-    if isinstance(output_text, str):
+    if isinstance(output_text, str) and output_text.strip():
         return output_text
     texts: list[str] = []
     for item in payload.get("output", []):
         if item.get("type") != "message":
             continue
         for content in item.get("content", []):
+            if content.get("type") == "refusal":
+                raise ValueError("Responses API returned a refusal")
             text = content.get("text")
-            if content.get("type") == "output_text" and isinstance(text, str):
+            if content.get("type") == "output_text" and isinstance(text, str) and text.strip():
                 texts.append(text)
     if not texts:
-        raise ValueError(
+        raise EmptyResponseError(
             "Responses API payload contains no output text: "
             f"status={payload.get('status')}, "
-            f"incomplete_details={payload.get('incomplete_details')}"
+            f"incomplete_details={payload.get('incomplete_details')}, "
+            f"output_types={[item.get('type') for item in payload.get('output', [])]}, "
+            f"usage={payload.get('usage')}"
         )
     return "".join(texts)
 
@@ -114,20 +129,42 @@ class OpenAIResponsesBackend:
                     json=request_payload,
                     timeout=self._timeout_s,
                 )
-                break
             except httpx.TransportError:
                 if attempt == 2:
                     raise
+                continue
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                detail = response.text
+                if self._api_key:
+                    detail = detail.replace(self._api_key, "<redacted>")
+                raise httpx.HTTPStatusError(
+                    f"{exc}\nServer response: {detail[:4000]}",
+                    request=exc.request,
+                    response=exc.response,
+                ) from exc
+            payload = response.json()
+            try:
+                response_text = _response_text(payload)
+            except EmptyResponseError:
+                if attempt == 2 or payload.get("status") not in {"completed", "incomplete"}:
+                    raise
+                continue
+            except ValueError as exc:
+                detail = str(exc)
+                if self._api_key:
+                    detail = detail.replace(self._api_key, "<redacted>")
+                raise ValueError(detail) from exc
+            break
         if response is None:  # pragma: no cover - loop either returns or raises
             raise RuntimeError("Responses API request produced no response")
         total_ms = (time.perf_counter() - started) * 1000
-        response.raise_for_status()
-        payload = response.json()
         usage = payload.get("usage", {})
         output_tokens = usage.get("output_tokens")
         tokens_per_s = output_tokens * 1000 / total_ms if output_tokens else None
         return GenerationResult(
-            text=_response_text(payload),
+            text=response_text,
             model=self.model,
             prefill_ms=None,
             first_token_ms=None,

@@ -68,6 +68,16 @@ def scenario_record(scenario):
     }
     if scenario in patches:
         item["expected"] = patches[scenario].to_dict()
+    texts = {
+        "single_filter": "这次只要开心果味的。",
+        "negation": "不要花生口味的。",
+        "allergy_vs_flavor": "我对花生过敏，必须排除花生。",
+        "numeric_size": "包装净含量要8oz。",
+        "query_text": "找 Dubai Chocolate 风格的。",
+        "reset": "前面的不要了，重新找草莓味。",
+    }
+    if scenario in texts:
+        item["input"]["user_input"] = texts[scenario]
     if scenario == "unmapped":
         item["input"]["user_input"] += "，高级一点"
     item["assertions"] = [{"type": "minimal_patch", "field": None}]
@@ -98,6 +108,20 @@ def test_retry_feedback_and_program_owned_metadata():
     assert "invented" not in sample.tags
     assert "unknown" in backend.calls[1][0][-1]["content"]
     assert len(backend.calls) == 2
+
+
+def test_single_filter_retry_feedback_explains_combined_condition_count():
+    good = scenario_record("single_filter")
+    bad = scenario_record("single_filter")
+    bad["expected"]["soft_preferences"] = [
+        SoftPreference("flavor", "prefer", values=("pistachio",)).to_dict()
+    ]
+    backend = SequenceBackend([bad, good])
+    sample = RawGenerator(backend, registry()).generate_one(GenerationRequest("single_filter", 3))
+    assert sample.id == "train-000003"
+    feedback = backend.calls[1][0][-1]["content"]
+    assert "got 1 hard and 1 soft" in feedback
+    assert "exactly one condition" in feedback
 
 
 @pytest.mark.parametrize("mutation", ["scenario", "assertions", "turn", "extra"])
@@ -160,12 +184,16 @@ def test_single_filter_quota_covers_every_registry_field(index, name):
     spec = registry().field(name)
     if spec.values:
         condition = HardFilter(name, "in", values=(spec.values[0].code,))
+        user_input = f"这次只要{spec.values[0].label}。"
     elif spec.type == "boolean":
         condition = HardFilter(name, "eq", value=True)
+        user_input = "必须是经过验证的耐烤商品。"
     else:
         condition = HardFilter(name, "eq", value=2, unit="g" if spec.units else None)
+        user_input = f"只要求{name}恰好为2{'g' if spec.units else ''}。"
     item = scenario_record("single_filter")
     item["expected"] = SearchPatch(hard_filters=(condition,)).to_dict()
+    item["input"]["user_input"] = user_input
     sample = RawGenerator(SequenceBackend([item]), registry()).generate_one(
         GenerationRequest("single_filter", index)
     )

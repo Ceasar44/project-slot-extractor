@@ -179,7 +179,16 @@ def _validate_semantics(record: dict, registry: Registry) -> list[str]:
         "reset": patch.reset,
     }
     if not requirements[scenario]:
-        errors.append(f"scenario {scenario!r}: inconsistent with state/patch")
+        if scenario == "single_filter":
+            errors.append(
+                "scenario 'single_filter': requires exactly one condition in "
+                "hard_filters + soft_preferences combined; "
+                f"got {len(patch.hard_filters)} hard and {len(patch.soft_preferences)} soft; "
+                f"fields={[c.field for c in conditions]}. "
+                "Use only the requested target field and do not duplicate it as hard and soft."
+            )
+        else:
+            errors.append(f"scenario {scenario!r}: inconsistent with state/patch")
     for assertion in record["assertions"]:
         kind, field = assertion["type"], assertion["field"]
         supported = True

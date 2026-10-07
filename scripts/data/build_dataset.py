@@ -7,8 +7,14 @@ from pathlib import Path
 import yaml
 
 from slot_extractor.data.dataset_build import _split, build_dataset, validate_build_target
+from slot_extractor.data.diversity_audit import audit_diversity
+from slot_extractor.data.generation_quality import validate_generation_quality
 from slot_extractor.data.raw_sample import raw_sample_from_record
-from slot_extractor.data.search_generation import generate_raw_dataset, generation_requests
+from slot_extractor.data.search_generation import (
+    generate_raw_dataset,
+    generation_requests,
+    prepare_generation_plan,
+)
 from slot_extractor.inference.factory import build_backend_from_config
 from slot_extractor.registry import load_registry
 from slot_extractor.utils.jsonl import read_jsonl
@@ -53,6 +59,7 @@ def run(args):
     if config.get("dataset_id", expected_id) != expected_id:
         raise ValueError("raw dataset_id differs from search build version")
     if args.dry_run:
+        prepare_generation_plan(config, registry)
         requests = _generation_requests(config)
         print(f"search_sft version={version} samples={len(requests)} enable_dpo=false")
         return 0
@@ -71,6 +78,19 @@ def run(args):
     else:
         raise ValueError("choose --raw-input, --generate or --mock explicitly")
     samples = [raw_sample_from_record(r, registry) for r in read_jsonl(source)]
+    plans, _ = prepare_generation_plan(config, registry)
+    if plans:
+        plan_by_id = {plan.id: plan for plan in plans}
+        if len(samples) != len(plans) or {sample.id for sample in samples} != set(plan_by_id):
+            raise ValueError("raw samples do not fulfill the complete planned quota")
+        audit_rows = []
+        for sample in samples:
+            plan = plan_by_id[sample.id]
+            validate_generation_quality(sample, registry, plan=plan)
+            audit_rows.append(dict(sample.to_dict(), language=plan.language, style=plan.style))
+        diversity = audit_diversity(audit_rows, registry, config.get("diversity"))
+        if not diversity["ok"]:
+            raise ValueError(f"raw diversity deficits: {diversity['deficits']}")
     evaluation = list(read_jsonl(config["eval_path"]))
     result = build_dataset(
         samples,

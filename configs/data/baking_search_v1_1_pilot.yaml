@@ -1,0 +1,110 @@
+# Independent 42-sample pilot; never share its checkpoint with the 1820-sample run.
+dataset_id: baking-raw-v1.1.0
+registry_path: configs/catalog/registry.yaml
+output_dir: .tmp/baking-v1.1-pilot/raw/baking-v1.1.0
+output_root: .tmp/baking-v1.1-pilot
+version: baking-v1.1.0
+enable_dpo: false
+val_fraction: 0.1
+eval_path: data/eval/baking-v1.0/test.jsonl
+split: train
+seed: 42
+generation_concurrency: 2
+max_attempts: 3
+max_duplicate_retries: 3
+generate_inference_config: configs/inference/openai_responses_gpt_5.6_sol.yaml
+counts:
+  single_filter: 14
+  multi_filter: 2
+  hard_soft_mix: 2
+  negation: 2
+  allergy_vs_flavor: 2
+  replace: 2
+  clear: 2
+  preserve_state: 2
+  numeric_price: 2
+  numeric_size: 2
+  relative_numeric: 2
+  sort: 2
+  query_text: 2
+  unmapped: 2
+  reset: 2
+planning:
+  enabled: true
+  languages:
+  - zh
+  - en
+  - mixed
+  styles:
+  - statement
+  - question
+  - colloquial
+  orders:
+  - forward
+  - reverse
+  - shuffled
+  numeric_pools:
+    price:
+    - 0
+    - 5
+    - 9
+    - 12.5
+    - 15
+    - 20
+    - 25
+    - 35
+    - 50
+    - 75
+    size:
+    - 0.5
+    - 1
+    - 2
+    - 8
+    - 16
+    - 100
+    - 250
+    - 500
+    sweetness_level:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    flavor_intensity:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+  currencies:
+  - null
+  - USD
+  - EUR
+  - CNY
+  free_text_review_status: ai_drafted_pending_human_review
+  query_terms:
+  - Atelier collection
+  - Weekend special
+  - Celebration edition
+  - Seasonal signature
+  - Cafe exclusive
+  - Festival collection
+  - Limited edition
+  - Heritage series
+  - Picnic collection
+  - Boutique selection
+  - Celebration series
+  - Weekend edition
+  unmapped_terms:
+  - 高级一点
+  - 包装有仪式感
+  - 看起来更精致
+  - 适合拍照
+  - 有节日气氛
+  - 视觉上有层次
+  - 有故事感
+  - 包装更有设计感
+diversity:
+  min_field_combinations: 1
+  min_semantic_unique_ratio: 0.8
+  value_share_slack: 0.1
