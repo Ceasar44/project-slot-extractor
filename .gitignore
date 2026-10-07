@@ -78,6 +78,16 @@ data/processed/dpo/*
 !data/eval/dataset_contract.json
 !data/eval/test.sha256
 !data/eval/phase06_holdout_v0.3.jsonl
+# Baking Frozen Eval v1.0 and its review/provenance artifacts are versioned.
+!data/eval/baking-v1.0/
+data/eval/baking-v1.0/*
+!data/eval/baking-v1.0/test.jsonl
+!data/eval/baking-v1.0/test.sha256
+!data/eval/baking-v1.0/DATASET_CARD.md
+!data/eval/baking-v1.0/coverage.json
+!data/eval/baking-v1.0/validation-report.json
+!data/eval/baking-v1.0/review-records.jsonl
+!data/eval/baking-v1.0/manifest.json
 models/base/*
 models/adapters/*
 # Phase 04 final experiment adapters are versioned for Phase 05 reproduction.

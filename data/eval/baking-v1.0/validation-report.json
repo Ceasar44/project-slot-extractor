@@ -1,0 +1,559 @@
+{
+  "dataset_id": "baking-eval-v1.0",
+  "sample_count": 200,
+  "scenario_counts": {
+    "single_filter": 20,
+    "multi_filter": 15,
+    "hard_soft_mix": 20,
+    "negation": 10,
+    "allergy_vs_flavor": 25,
+    "replace": 15,
+    "clear": 10,
+    "preserve_state": 15,
+    "numeric_price": 15,
+    "numeric_size": 10,
+    "relative_numeric": 10,
+    "sort": 5,
+    "query_text": 5,
+    "unmapped": 10,
+    "reset": 15
+  },
+  "contract_valid": true,
+  "unique_ids": true,
+  "unique_normalized_user_inputs": true,
+  "coverage": {
+    "sample_count": 200,
+    "scenarios": {
+      "allergy_vs_flavor": 25,
+      "clear": 10,
+      "hard_soft_mix": 20,
+      "multi_filter": 15,
+      "negation": 10,
+      "numeric_price": 15,
+      "numeric_size": 10,
+      "preserve_state": 15,
+      "query_text": 5,
+      "relative_numeric": 10,
+      "replace": 15,
+      "reset": 15,
+      "single_filter": 20,
+      "sort": 5,
+      "unmapped": 10
+    },
+    "fields": {
+      "allergen": 23,
+      "application": 16,
+      "bake_stable": 6,
+      "dietary_claim": 12,
+      "flavor": 40,
+      "flavor_family": 6,
+      "flavor_intensity": 9,
+      "price": 30,
+      "product_type": 11,
+      "query_text": 1,
+      "size": 24,
+      "sort": 1,
+      "storage": 14,
+      "sweetness_level": 12,
+      "texture": 13,
+      "use_mode": 11
+    },
+    "operators": {
+      "hard:allergen:not_in": 23,
+      "hard:application:in": 14,
+      "hard:bake_stable:eq": 5,
+      "hard:dietary_claim:in": 10,
+      "hard:dietary_claim:not_in": 1,
+      "hard:flavor:in": 21,
+      "hard:flavor:not_in": 9,
+      "hard:flavor_family:in": 4,
+      "hard:flavor_family:not_in": 1,
+      "hard:flavor_intensity:between": 1,
+      "hard:flavor_intensity:gte": 1,
+      "hard:price:between": 4,
+      "hard:price:eq": 5,
+      "hard:price:gte": 3,
+      "hard:price:lte": 12,
+      "hard:product_type:in": 9,
+      "hard:size:between": 2,
+      "hard:size:eq": 10,
+      "hard:size:gte": 5,
+      "hard:size:lte": 2,
+      "hard:storage:in": 10,
+      "hard:storage:not_in": 1,
+      "hard:sweetness_level:between": 1,
+      "hard:sweetness_level:eq": 1,
+      "hard:sweetness_level:lte": 3,
+      "hard:texture:in": 8,
+      "hard:texture:not_in": 2,
+      "hard:use_mode:in": 9,
+      "soft:application:avoid": 1,
+      "soft:application:prefer": 1,
+      "soft:dietary_claim:prefer": 1,
+      "soft:flavor:avoid": 3,
+      "soft:flavor:prefer": 6,
+      "soft:flavor_family:prefer": 1,
+      "soft:flavor_intensity:around": 2,
+      "soft:flavor_intensity:higher": 4,
+      "soft:flavor_intensity:lower": 1,
+      "soft:price:around": 1,
+      "soft:price:between": 1,
+      "soft:price:lower": 2,
+      "soft:product_type:avoid": 1,
+      "soft:product_type:prefer": 1,
+      "soft:size:around": 2,
+      "soft:size:lower": 1,
+      "soft:storage:avoid": 1,
+      "soft:storage:prefer": 1,
+      "soft:sweetness_level:around": 1,
+      "soft:sweetness_level:between": 1,
+      "soft:sweetness_level:higher": 1,
+      "soft:sweetness_level:lower": 3,
+      "soft:texture:avoid": 1,
+      "soft:texture:prefer": 1,
+      "soft:use_mode:avoid": 1,
+      "soft:use_mode:prefer": 1
+    },
+    "units": {
+      "price:USD": 22,
+      "size:g": 10,
+      "size:kg": 8,
+      "size:oz": 3
+    },
+    "capabilities": {
+      "allergen": 23,
+      "allergy_vs_flavor": 25,
+      "application": 16,
+      "bake_stable": 6,
+      "clear": 10,
+      "dietary_claim": 12,
+      "flavor": 40,
+      "flavor_family": 6,
+      "flavor_intensity": 9,
+      "hard": 155,
+      "hard_soft": 21,
+      "hard_soft_mix": 20,
+      "multi_filter": 15,
+      "multi_turn": 55,
+      "negation": 44,
+      "numeric_price": 15,
+      "numeric_size": 10,
+      "preserve_state": 15,
+      "price": 30,
+      "product_type": 11,
+      "query_text": 7,
+      "relative_numeric": 18,
+      "replace": 28,
+      "reset": 15,
+      "single_filter": 20,
+      "single_turn": 145,
+      "size": 24,
+      "soft": 41,
+      "sort": 9,
+      "storage": 14,
+      "sweetness_level": 12,
+      "texture": 13,
+      "unmapped": 10,
+      "use_mode": 11
+    },
+    "deficits": {}
+  },
+  "tag_audit": {
+    "counts": {
+      "allergen": 23,
+      "allergy_vs_flavor": 25,
+      "application": 16,
+      "bake_stable": 6,
+      "clear": 10,
+      "dietary_claim": 12,
+      "flavor": 40,
+      "flavor_family": 6,
+      "flavor_intensity": 9,
+      "hard": 155,
+      "hard_soft": 21,
+      "hard_soft_mix": 20,
+      "multi_filter": 15,
+      "multi_turn": 55,
+      "negation": 44,
+      "numeric_price": 15,
+      "numeric_size": 10,
+      "preserve_state": 15,
+      "price": 30,
+      "product_type": 11,
+      "query_text": 7,
+      "relative_numeric": 18,
+      "replace": 28,
+      "reset": 15,
+      "single_filter": 20,
+      "single_turn": 145,
+      "size": 24,
+      "soft": 41,
+      "sort": 9,
+      "storage": 14,
+      "sweetness_level": 12,
+      "texture": 13,
+      "unmapped": 10,
+      "use_mode": 11
+    },
+    "mismatched_ids": []
+  },
+  "isolation": {
+    "scanned_files": [
+      {
+        "path": "data/raw/v0.1/samples.jsonl",
+        "sha256": "4e32c99c5b3afec5751b31a25db57619b9cb11d6343c5a124d50c51ab8280c12"
+      },
+      {
+        "path": "data/raw/v0.2/samples.jsonl",
+        "sha256": "c2630435d50d7c2df295d9c71cc8222094ae84d358abc9b494a938771734491a"
+      },
+      {
+        "path": "data/raw/v0.3/samples.jsonl",
+        "sha256": "32e06c38d8593258fe95120d11118b97d67a71e7a95d8ddaf1eabe6cb5c12013"
+      },
+      {
+        "path": "data/raw/v0.4/samples.jsonl",
+        "sha256": "a22d2dca65fd4b332e7e6cf1a1eb185351eb310f887a2f705e3391ddce41c747"
+      },
+      {
+        "path": "data/raw/v0.5/samples.jsonl",
+        "sha256": "87be66f46bfa91728fdec7d49af37d03a26e4a9b9785991eea0e81e5c6ca481f"
+      },
+      {
+        "path": "data/processed/dpo/v0.1/train.jsonl",
+        "sha256": "446d57efdecd00f77e6b0e17246bcdce6c5d0a9854f02e4e12a9670efcdedb7a"
+      },
+      {
+        "path": "data/processed/dpo/v0.1/val.jsonl",
+        "sha256": "13d818f713b606020331a069628ae6aaed1f47ebacd31e1c2d8cba27d0e23655"
+      },
+      {
+        "path": "data/processed/sft/v0.1/train.jsonl",
+        "sha256": "4a66039a37cd01d06e10a0cc8206dea249ebbb1c7f9c75cc8ac40ff8bc096eac"
+      },
+      {
+        "path": "data/processed/sft/v0.1/val.jsonl",
+        "sha256": "1025302baa88a7e12e59fb39c9f15f9c1dbbd38717c991f921e83bab70dc48a7"
+      },
+      {
+        "path": "data/processed/sft/v0.2/train.jsonl",
+        "sha256": "c3480405783474c5a35a791e88b7891c05d4217b45ee6dc01d5a9017c22bcf46"
+      },
+      {
+        "path": "data/processed/sft/v0.2/val.jsonl",
+        "sha256": "3793767488d1b1dfce732192df75fdab4bb8c3cd91628914d3d3f4c7793de81a"
+      },
+      {
+        "path": "data/processed/sft/v0.3/large/train.jsonl",
+        "sha256": "3b248363bce21fdbda94063ea9c8a16f5eb11103e8c46c29a3b4a472c57d0f8f"
+      },
+      {
+        "path": "data/processed/sft/v0.3/large/val.jsonl",
+        "sha256": "253e20028dc580351c53f6c4768b472f61aa97653e9fc5ae3ee5e655d687258a"
+      },
+      {
+        "path": "data/processed/sft/v0.3/small/train.jsonl",
+        "sha256": "f2026f66142f57f6c15448a4e7d976e68aee53565e06f7f1ecdc1960b863996d"
+      },
+      {
+        "path": "data/processed/sft/v0.3/small/val.jsonl",
+        "sha256": "10646a259ef051cb2d658a6ce8dce22fc59f66ca2919d50e0bdcde92f70cc2e2"
+      },
+      {
+        "path": "data/processed/sft/v0.4/large/train.jsonl",
+        "sha256": "336d6ee49bef6b62a036ade7e1f110af1bfaf8a8c6d451b3bc5f5e8a4bf5a3b0"
+      },
+      {
+        "path": "data/processed/sft/v0.4/large/val.jsonl",
+        "sha256": "b4eb690bcdce0bd84d61fe8750a6b6349f6a21659a43e116081e164073212e1f"
+      },
+      {
+        "path": "data/processed/sft/v0.4/small/train.jsonl",
+        "sha256": "9da2cb48f7918c7bf781402a359fbdaa336616558041ef11fba6b2c16b83fc2e"
+      },
+      {
+        "path": "data/processed/sft/v0.4/small/val.jsonl",
+        "sha256": "6414ee6f62e5bc60956f166f02aaeb8608c77022d021936b5cbd88659b55c5c4"
+      },
+      {
+        "path": "data/processed/sft/v0.5/large/train.jsonl",
+        "sha256": "ecf8d689c77905aa86279bd14da1e443af14e003cdbb8f9dff2ce98e13a00147"
+      },
+      {
+        "path": "data/processed/sft/v0.5/large/val.jsonl",
+        "sha256": "f1d9354f9599262371ce3ebd7be97a11290e547def07e88deb96e31fba1c3209"
+      },
+      {
+        "path": "data/processed/sft/v0.5/small/train.jsonl",
+        "sha256": "341e39200f46da93802e837da7e59e7765b32fca686c333bc47cb9b8e433c024"
+      },
+      {
+        "path": "data/processed/sft/v0.5/small/val.jsonl",
+        "sha256": "06031ffa699c990b6f4e5bd2f7af054b47818d6b661338a9de32a01bcae3d080"
+      }
+    ],
+    "scanned_rows": 13945,
+    "exact_user_input_overlaps": [],
+    "scope": "Existing data/raw and data/processed JSONL; whitespace-normalized user text.",
+    "limitations": "No paraphrase equivalence proof; no future baking train/val exists yet."
+  },
+  "near_duplicate_pairs_threshold_0_8": [
+    {
+      "left": "eval-000005",
+      "right": "eval-000100",
+      "ratio": 0.8571,
+      "disposition": "Intentional controlled contrast; not independent observations."
+    }
+  ],
+  "gold_replay": {
+    "purpose": "Harness/assertion self-consistency, NOT inference or baseline",
+    "cases": 200,
+    "assertions": 1440,
+    "failed_ids": [],
+    "model_calls": 0
+  },
+  "negative_controls": [
+    {
+      "sample_id": "eval-000066",
+      "error": "过敏原排除误写为风味排除",
+      "expected_failed_assertion": "allergen_semantics_correct",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "flavor",
+            "op": "not_in",
+            "value": null,
+            "values": [
+              "peanut"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000036",
+      "error": "最好风味误写为硬过滤",
+      "expected_failed_assertion": "hard_soft_correct",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "application",
+            "op": "in",
+            "value": null,
+            "values": [
+              "croissant_pastry"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          },
+          {
+            "field": "use_mode",
+            "op": "in",
+            "value": null,
+            "values": [
+              "fill"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          },
+          {
+            "field": "flavor",
+            "value": null,
+            "values": [
+              "pistachio"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null,
+            "op": "in"
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000156",
+      "error": "相对甜度擅自硬量化",
+      "expected_failed_assertion": "hard_soft_correct",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "sweetness_level",
+            "op": "lte",
+            "value": 2,
+            "values": [],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000116",
+      "error": "修改口味时误重置并丢失预算",
+      "expected_failed_assertion": "field_preserved",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": true,
+        "hard_filters": [
+          {
+            "field": "flavor",
+            "op": "in",
+            "value": null,
+            "values": [
+              "matcha"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000150",
+      "error": "模型提前换算kg为g",
+      "expected_failed_assertion": "field_exact",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "size",
+            "op": "eq",
+            "value": 2000,
+            "values": [],
+            "min_value": null,
+            "max_value": null,
+            "unit": "g"
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000186",
+      "error": "重开搜索漏写reset",
+      "expected_failed_assertion": "minimal_patch",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "flavor",
+            "op": "in",
+            "value": null,
+            "values": [
+              "strawberry"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000001",
+      "error": "未知字段",
+      "expected_failed_assertion": "no_unknown_field",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "invented_field",
+            "op": "in",
+            "value": null,
+            "values": [
+              "cream_spread"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    },
+    {
+      "sample_id": "eval-000001",
+      "error": "未知枚举",
+      "expected_failed_assertion": "no_unknown_value",
+      "detected": true,
+      "wrong_output": {
+        "schema_version": "1.0",
+        "reset": false,
+        "hard_filters": [
+          {
+            "field": "product_type",
+            "op": "in",
+            "value": null,
+            "values": [
+              "invented_value"
+            ],
+            "min_value": null,
+            "max_value": null,
+            "unit": null
+          }
+        ],
+        "soft_preferences": [],
+        "clear_fields": [],
+        "query_text": null,
+        "sort": null,
+        "unmapped_terms": []
+      }
+    }
+  ]
+}

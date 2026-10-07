@@ -6,5 +6,11 @@ models/adapters/**/adapter_model.safetensors filter=lfs diff=lfs merge=lfs -text
 requirements-train.txt text eol=lf
 data/eval/*.jsonl text eol=lf
 data/eval/*.sha256 text eol=lf
+# Preserve byte hashes of the baking Frozen Eval bundle across Windows checkouts.
+data/eval/baking-v1.0/* text eol=lf
+docs/baking-frozen-eval-v1/*.md text eol=lf
+configs/catalog/registry.yaml text eol=lf
+scripts/data/create_baking_frozen_eval_v1.py text eol=lf
+scripts/eval/verify_frozen_search_eval.py text eol=lf
 data/raw/v0.3/*.jsonl text eol=lf
 data/processed/sft/v0.3/**/*.jsonl text eol=lf

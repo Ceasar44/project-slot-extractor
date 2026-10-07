@@ -3,7 +3,8 @@
 将用户对烘焙酱料的自然语言需求转成固定结构的 SearchPatch，由确定性代码合并搜索状态、生成 Typesense 查询参数。
 项目提供 Qwen3 0.6B / 1.7B 的数据构建、SFT 配置、评估、GGUF 量化与本地双模型比较界面。
 
-当前完成迁移代码与离线验证。正式 Frozen Eval、训练语料、烘焙 adapter 和 GGUF 尚未产生；历史预约模型的分数不代表本业务效果。
+当前完成迁移代码与离线验证，并制备、冻结 200 条烘焙合成评估样本（AI 起草和复核，独立人工审核待完成）。
+训练语料、烘焙 adapter 和 GGUF 尚未产生，烘焙基线未运行；历史预约模型的分数不代表本业务效果。
 Task 09 的 Search DPO 暂缓，SFT builder 明确拒绝启用 DPO。
 
 ## 架构
@@ -57,6 +58,8 @@ dry-run 不调用生成模型、不训练，也不证明正式输入已经齐备
 ## 数据流程
 
 先独立设计、审核并冻结 `data/eval/baking-v1.0/test.jsonl`，再生成训练 Raw。
+当前已固定 baking-v1.0 的 200 条合成评估样本，覆盖 15 类场景和 14 个可抽取字段。
+冻结表示版本内容固定，不代表独立人工审核或模型验收通过；逐步制作与复核依据见 [九步制作记录](docs/baking-frozen-eval-v1/README.md)。
 Raw / Eval 使用 `id/scenario/tags/input/expected/assertions` 六个字段。
 `input` 仅包含 `current_search_state` 和 `user_input`；`expected` 为完整 SearchPatch。
 
@@ -64,6 +67,7 @@ Raw / Eval 使用 `id/scenario/tags/input/expected/assertions` 六个字段。
 
 ```powershell
 uv run python -m scripts.eval.validate_dataset
+uv run python -m scripts.eval.verify_frozen_search_eval
 ```
 
 默认校验器使用 baking Eval 与 Catalog Registry；空数据、预约协议或非法 Gold 均失败。
@@ -92,7 +96,7 @@ uv run python -m scripts.data.build_dataset --config configs/data/baking_search_
 | 正式独立评估 | `data/eval/baking-v1.0/test.jsonl` |
 
 `data/dataset-registry.yaml` 管理 dataset ID、状态、parent 和路径。
-发布正式版本时补齐实际 SHA256 与来源关系；目前 baking 条目保持 `planned`。
+评估条目已更新为 `frozen`，记录 SHA256、来源、AI 审核边界和基线暂缓状态；Raw / SFT 条目仍为 `planned`。
 修订正式数据使用新版本，不覆盖冻结版本。
 
 ## SFT 训练
@@ -193,6 +197,7 @@ Python 包名 `slot_extractor` 保留，避免破坏安装和历史复现。
 | 业务事实源 | [Catalog Registry](docs/catalog-registry.md) |
 | 协议与状态 | [Search schema](docs/search-schema.md)、[Runtime](docs/search-runtime.md) |
 | Raw / Eval | [数据合同](docs/search-dataset-contract.md) |
+| Frozen Eval 制作与审核 | [九步制作记录](docs/baking-frozen-eval-v1/README.md)、[数据卡](data/eval/baking-v1.0/DATASET_CARD.md) |
 | 生成与 SFT | [生成](docs/search-generation.md)、[构建](docs/search-dataset-build.md) |
 | Prompt / Eval | [Prompt](docs/search-prompts.md)、[评估](docs/search-evaluation.md) |
 | 训练与量化配置 | [模型配置](docs/search-model-configs.md) |

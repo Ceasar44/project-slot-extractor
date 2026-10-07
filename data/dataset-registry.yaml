@@ -90,10 +90,16 @@ datasets:
     notes: Task 07 提供构建流水线；SFT only，正式产物生成与审核后再更新状态。
   - dataset_id: baking-eval-v1.0
     role: evaluation
-    status: planned
+    status: frozen
     parent: null
     path: data/eval/baking-v1.0/test.jsonl
     registry: configs/catalog/registry.yaml
     first_used_in: null
-    notes: 独立烘焙评估集预留；必须在正式训练语料生成前设计、审核并冻结。
+    frozen_date: '2026-10-06'
+    sha256: 60ccf3ef02909f435d82c6a9c49b8079665abe5d0b8810e4dac2dd5eef72d0db
+    sha256_file: data/eval/baking-v1.0/test.sha256
+    manifest: data/eval/baking-v1.0/manifest.json
+    review_status: ai_reviewed_pending_independent_human_review
+    baseline_status: not_run_per_user_request
+    notes: 200条独立合成烘焙评估样本；版本已冻结，AI复核通过，独立人工审核待完成；未运行基线，禁止训练使用。
 # 新数据版本必须新增条目，禁止修改旧版本文件来复用版本号。
