@@ -143,7 +143,11 @@ class Tokenizer:
 
     def apply_chat_template(self, messages, **kwargs):
         assert kwargs["enable_thinking"] is False
-        return [0] * (self.full if len(messages) == 3 else self.prompt)
+        tokens = [0] * (self.full if len(messages) == 3 else self.prompt)
+        # Transformers 5 defaults to a mapping; len(mapping) counts fields, not tokens.
+        if kwargs.get("return_dict", True):
+            return {"input_ids": tokens, "attention_mask": [1] * len(tokens)}
+        return tokens
 
     def encode(self, text, **kwargs):
         return [0] * self.gold
@@ -164,7 +168,12 @@ def test_token_preflight_accepts_boundary_and_counts_all_rows(tmp_path):
     path = tmp_path / "train.jsonl"
     row = render_sft(raw_sample_from_record(record(), registry()), registry())
     path.write_text((json.dumps(row) + "\n") * 2, encoding="utf-8")
-    assert check_rows(path, Tokenizer(), registry(), 132, 100, 210)["rows"] == 2
+    assert check_rows(path, Tokenizer(), registry(), 132, 100, 210) == {
+        "rows": 2,
+        "max_full_tokens": 100,
+        "max_prompt_tokens": 70,
+        "max_gold_tokens": 30,
+    }
 
 
 def test_real_quantization_dry_run_does_not_import_training_stack(capsys):

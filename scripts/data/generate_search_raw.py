@@ -21,6 +21,15 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--strict-audit", action="store_true")
     parser.add_argument(
+        "--resume-backend-from-identity",
+        help="Verified previous identity JSON for an explicit backend change",
+    )
+    parser.add_argument(
+        "--validate-resume",
+        action="store_true",
+        help="Validate and save resume metadata without calling the model",
+    )
+    parser.add_argument(
         "--fail-fast",
         action="store_true",
         help="Stop on the first exhausted sample validation retry",
@@ -60,15 +69,24 @@ def main() -> int:
                 )
             return 0
         backend = build_backend_from_config(config["generate_inference_config"])
+        previous_identity = None
+        if args.resume_backend_from_identity:
+            import json
+
+            previous_identity = json.loads(
+                Path(args.resume_backend_from_identity).read_text(encoding="utf-8")
+            )
         output = generate_raw_dataset(
             config,
             backend,
             args.output_dir or config["output_dir"],
             strict_audit=args.strict_audit,
             fail_fast=args.fail_fast,
+            resume_backend_identity=previous_identity,
+            validate_resume=args.validate_resume,
         )
         print(output)
-        return 0 if output.name == "samples.jsonl" else 2
+        return 0 if args.validate_resume or output.name == "samples.jsonl" else 2
     except Exception as exc:
         print(f"search raw generation failed: {exc}", file=sys.stderr)
         return 1

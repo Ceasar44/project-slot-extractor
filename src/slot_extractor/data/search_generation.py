@@ -82,7 +82,14 @@ def prepare_generation_plan(config, registry=None):
 
 
 def generate_raw_dataset(
-    config: dict, backend, output_dir: str | Path, *, strict_audit=False, fail_fast=False
+    config: dict,
+    backend,
+    output_dir: str | Path,
+    *,
+    strict_audit=False,
+    fail_fast=False,
+    resume_backend_identity=None,
+    validate_resume=False,
 ):
     """Generate raw only; SFT rendering belongs to Task 07. Never replace final raw gold."""
     requests = generation_requests(config)
@@ -152,6 +159,8 @@ def generate_raw_dataset(
                 getattr(backend, "_default_params", None), "max_tokens", None
             ),
         }
+        if getattr(backend, "_thinking", None) is not None:
+            identity["backend"]["thinking"] = backend._thinking
         backend_source = getattr(sys.modules.get(type(backend).__module__), "__file__", None)
         identity["backend"]["implementation_sha256"] = (
             hashlib.sha256(Path(backend_source).read_bytes()).hexdigest()
@@ -165,10 +174,13 @@ def generate_raw_dataset(
     signature = _hash(identity)
     checkpoint = root / ".generation_checkpoint.jsonl"
     meta = root / ".generation_checkpoint.meta.json"
+    metadata = {}
+    transition = None
     if checkpoint.exists() and not meta.exists():
         raise ValueError("checkpoint has no identity metadata")
     if meta.exists():
-        stored_signature = json.loads(meta.read_text(encoding="utf-8"))["signature"]
+        metadata = json.loads(meta.read_text(encoding="utf-8"))
+        stored_signature = metadata["signature"]
         # This scheduler-only update preserves the previous validation contract.
         # Accept only the exact preceding implementation with all other hashes unchanged.
         previous_identity = dict(identity)
@@ -176,8 +188,44 @@ def generate_raw_dataset(
         previous_identity["implementation_sha256"]["search_generation.py"] = (
             "84e91e1ec47ed6338ef4f09d172d7a27d469622d91d82526e2f5ce18f59f7468"
         )
-        if stored_signature not in {signature, _hash(previous_identity)}:
-            raise ValueError("checkpoint config/registry/eval/model contract changed")
+        accepted_signatures = {signature, _hash(previous_identity)}
+        preceding_identity = dict(identity)
+        preceding_identity["implementation_sha256"] = dict(identity["implementation_sha256"])
+        preceding_identity["implementation_sha256"]["search_generation.py"] = (
+            "16773d7a2d24cb620faded7349ea5281b12aa644e40f8db807e206416e26ce83"
+        )
+        accepted_signatures.add(_hash(preceding_identity))
+        # The immediately preceding implementation omitted the thinking identity field.
+        before_thinking_identity = dict(identity)
+        before_thinking_identity["implementation_sha256"] = dict(identity["implementation_sha256"])
+        before_thinking_identity["implementation_sha256"]["search_generation.py"] = (
+            "2a93753ce854317c514e38f8e973c44c58bb99b57660641cf92bc91ad4e0bdf0"
+        )
+        accepted_signatures.add(_hash(before_thinking_identity))
+        if stored_signature not in accepted_signatures:
+            if resume_backend_identity is None:
+                raise ValueError("checkpoint config/registry/eval/model contract changed")
+            if _hash(resume_backend_identity) != stored_signature:
+                raise ValueError("previous backend identity does not match checkpoint signature")
+            old_contract = {
+                k: v for k, v in resume_backend_identity.items() if k not in {"model", "backend"}
+            }
+            allowed_contracts = [
+                {k: v for k, v in candidate.items() if k not in {"model", "backend"}}
+                for candidate in (identity, preceding_identity, before_thinking_identity)
+            ]
+            if old_contract not in allowed_contracts:
+                raise ValueError("backend migration cannot change the generation contract")
+            if "backend" not in resume_backend_identity or "backend" not in identity:
+                raise ValueError("backend migration requires planned generation identities")
+            transition = {
+                "from_signature": stored_signature,
+                "to_signature": signature,
+                "previous_backend": resume_backend_identity["backend"],
+                "next_backend": identity["backend"],
+            }
+    elif resume_backend_identity is not None:
+        raise ValueError("backend migration requires an existing checkpoint")
     if plans:
         plan_path = root / "generation_plan.jsonl"
         rows = [plan.to_dict() for plan in plans]
@@ -189,7 +237,6 @@ def generate_raw_dataset(
                 raise ValueError("planned checkpoint is missing generation_plan.jsonl")
             write_jsonl(plan_path, rows)
         _write_json(root / "plan_audit.json", plan_audit)
-    _write_json(meta, {"signature": signature})
     by_id = {generation_sample_id(r): r for r in requests}
     completed = {}
     failures = {}
@@ -223,6 +270,16 @@ def generate_raw_dataset(
     if checkpoint.exists():
         for record in read_jsonl(checkpoint):
             accept(raw_sample_from_record(record, registry))
+    if transition is not None:
+        transition["retained_sample_ids"] = list(completed)
+        transition["checkpoint_sha256"] = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+        metadata.setdefault("backend_transitions", []).append(transition)
+    metadata["signature"] = signature
+    metadata["backend"] = identity.get("backend", {"model": backend.model})
+    _write_json(meta, metadata)
+    if validate_resume:
+        print(f"Resume validated: {len(completed)}/{len(requests)}; no model calls", flush=True)
+        return checkpoint
     pending = [r for r in requests if generation_sample_id(r) not in completed]
     if plans:
         pending = interleave_requests(pending)
@@ -357,6 +414,11 @@ def generate_raw_dataset(
             "scenario_counts": coverage.scenarios,
             "coverage_ok": coverage.ok,
             "gold_review_required": True,
+            **(
+                {"backend_transitions": metadata["backend_transitions"]}
+                if metadata.get("backend_transitions")
+                else {}
+            ),
             **(
                 {
                     "plan_sha256": plan_audit["plan_sha256"],

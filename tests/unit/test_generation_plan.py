@@ -313,3 +313,86 @@ def test_normalization_and_signatures_include_old_state():
     assert semantic_signature("replace", {}, {"value": "old1"}) != semantic_signature(
         "replace", {}, {"value": "old2"}
     )
+
+
+def test_explicit_backend_migration_revalidates_and_keeps_provenance(tmp_path, monkeypatch):
+    import slot_extractor.data.search_generation as pipeline
+
+    cfg = config()
+    cfg["counts"] = {"single_filter": 2}
+    cfg["generation_concurrency"] = 1
+    cfg["registry_path"] = str(CONFIG_PATH.parents[1] / "catalog/registry.yaml")
+    plans = build_generation_plan(cfg, registry())
+    evaluation = render(plans[0])
+    evaluation["id"] = "eval-000001"
+    evaluation["input"]["user_input"] = "独立评估专用原话"
+    cfg["eval_path"] = str(tmp_path / "eval.jsonl")
+    write_jsonl(cfg["eval_path"], [evaluation])
+    old_identities = []
+    original_hash = pipeline._hash
+
+    def capture(value):
+        if isinstance(value, dict) and "implementation_sha256" in value:
+            old_identities.append(deepcopy(value))
+        return original_hash(value)
+
+    monkeypatch.setattr(pipeline, "_hash", capture)
+
+    class Backend:
+        model = "old-model"
+        _base_url = "https://old.example/v1"
+
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, messages, params=None):
+            sample_id = json.loads(messages[1]["content"].split("\n")[-1])["id"]
+            self.calls.append(sample_id)
+            if self.model == "old-model" and len(self.calls) == 2:
+                raise RuntimeError("offline")
+            plan = next(p for p in plans if p.id == sample_id)
+            return Result(json.dumps(render(plan)))
+
+    root = tmp_path / "raw"
+    with pytest.raises(RuntimeError, match="offline"):
+        generate_raw_dataset(cfg, Backend(), root)
+    old_identity = old_identities[0]
+    backend = Backend()
+    backend.model = "new-model"
+    backend._base_url = "https://new.example/v1"
+    backend._thinking = {"type": "disabled"}
+    meta = root / ".generation_checkpoint.meta.json"
+    previous_meta = meta.read_bytes()
+    with pytest.raises(ValueError, match="contract changed"):
+        generate_raw_dataset(cfg, backend, root)
+    forged = deepcopy(old_identity)
+    forged["model"] = "forged"
+    with pytest.raises(ValueError, match="does not match checkpoint"):
+        generate_raw_dataset(cfg, backend, root, resume_backend_identity=forged)
+    with pytest.raises(ValueError, match="cannot change the generation contract"):
+        generate_raw_dataset(
+            dict(cfg, seed=99), backend, root, resume_backend_identity=old_identity
+        )
+    checkpoint = root / ".generation_checkpoint.jsonl"
+    checkpoint_bytes = checkpoint.read_bytes()
+    rows = list(read_jsonl(checkpoint))
+    rows[0]["expected"]["schema_version"] = "invalid"
+    write_jsonl(checkpoint, rows)
+    with pytest.raises(ValueError):
+        generate_raw_dataset(cfg, backend, root, resume_backend_identity=old_identity)
+    assert meta.read_bytes() == previous_meta
+    checkpoint.write_bytes(checkpoint_bytes)
+    generate_raw_dataset(
+        cfg, backend, root, resume_backend_identity=old_identity, validate_resume=True
+    )
+    assert backend.calls == []
+    assert checkpoint.read_bytes() == checkpoint_bytes
+    history = json.loads(meta.read_text())["backend_transitions"]
+    assert history[0]["previous_backend"]["model"] == "old-model"
+    assert history[0]["next_backend"]["model"] == "new-model"
+    assert history[0]["next_backend"]["thinking"] == {"type": "disabled"}
+    assert history[0]["retained_sample_ids"] == ["train-000001"]
+    output = generate_raw_dataset(cfg, backend, root)
+    assert backend.calls == ["train-000002"]
+    assert json.loads((root / "manifest.json").read_text())["backend_transitions"] == history
+    assert len(list(read_jsonl(output))) == 2

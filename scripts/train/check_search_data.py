@@ -29,13 +29,18 @@ def check_rows(path, tokenizer, registry, cutoff_len, max_tokens=2048, context_s
         ]
         prompt = len(
             tokenizer.apply_chat_template(
-                messages, tokenize=True, add_generation_prompt=True, enable_thinking=False
+                messages,
+                tokenize=True,
+                return_dict=False,
+                add_generation_prompt=True,
+                enable_thinking=False,
             )
         )
         full = len(
             tokenizer.apply_chat_template(
                 [*messages, {"role": "assistant", "content": turns[1]["value"]}],
                 tokenize=True,
+                return_dict=False,
                 add_generation_prompt=False,
                 enable_thinking=False,
             )

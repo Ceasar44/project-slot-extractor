@@ -54,10 +54,15 @@ def build_backend_from_config(path: str | Path) -> Backend:
                 timeout_s=float(config.get("timeout_s", 180)),
                 temperature=None if temperature is None else float(temperature),
                 max_tokens=int(config.get("max_tokens", 512)),
-                **({
-                    "reasoning": config.get("reasoning"),
-                    "max_retry_tokens": int(config.get("max_retry_tokens", 16384)),
-                } if backend == "openai_chat" else {}),
+                **(
+                    {
+                        "reasoning": config.get("reasoning"),
+                        "thinking": config.get("thinking"),
+                        "max_retry_tokens": int(config.get("max_retry_tokens", 16384)),
+                    }
+                    if backend == "openai_chat"
+                    else {}
+                ),
             )
         )
 

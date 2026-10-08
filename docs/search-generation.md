@@ -48,7 +48,7 @@ python -m scripts.data.generate_search_raw --config configs/data/baking_search_v
 
 当前生成配置使用 `backend: openai_chat`，调用 `/chat/completions`，不发送 `response_format` 或服务端强制 JSON Schema。提示词仍提供 Raw Schema，字符串 `minLength` 为 1；返回结果在本地执行严格 JSON、合同、文本质量及去重检查，失败时按既有上限重试。生成质量检查仍要求完整原话（至少 4 个文字/数字字符），并检查分类别名和显式数值依据；Schema 的最低长度不等于生成质量要求。该检查只拦截明显错误，不替代 Gold 语义审核。历史配置文件名 `openai_responses_gpt_5.6_sol.yaml` 保留以兼容数据配置引用，以文件内的 `backend` 和 `model` 为准。
 
-OpenRouter 生成配置显式发送 `reasoning: {enabled: false}`，请求关闭推理以给 Raw JSON 留出预算。供应商是否执行该设置需看实际 usage。遇到 `finish_reason=length`（包括只有 reasoning 或部分正文）时，不按原预算盲目重试，而是逐步增大总输出预算，默认从 4096 到 8192，再到 `max_retry_tokens: 16384` 上限；仍截断时停止并保留 checkpoint。正常样本不增加预算，HTTP 拒绝和内容拒绝不触发预算升级。
+当前 SubRouter / DeepSeek 配置显式发送 `thinking: {type: disabled}`，使用 DeepSeek Chat Completions 的思考开关，不再发送 OpenRouter 的 `reasoning: {enabled: false}`。后端仍支持其他渠道使用 reasoning，但同一配置不能同时指定两种开关。供应商是否执行该设置需看实际 usage 或 reasoning_content；离线测试只能证明请求参数正确。思考设置纳入后端断点身份，修改后应使用上面的显式后端迁移流程，保留原样本来源。遇到 `finish_reason=length`（包括只有 reasoning 或部分正文）时，不按原预算盲目重试，而是逐步增大总输出预算，默认从 4096 到 8192，再到 `max_retry_tokens: 16384` 上限；仍截断时停止并保留 checkpoint。正常样本不增加预算，HTTP 拒绝和内容拒绝不触发预算升级。
 
 ```powershell
 python -m scripts.data.generate_search_raw --config configs/data/baking_search_v1.yaml --strict-audit
@@ -59,6 +59,16 @@ python -m scripts.data.generate_search_raw --config configs/data/baking_search_v
 生成流水线支持并发，结果按请求顺序持久化。每条完成样本写入原子 checkpoint；再次执行相同命令只生成未完成请求。恢复会重校验已有样本、ID、场景、标签、断言、多轮形态、重复输入和评估隔离，并核对配置、Registry、评估集、后端模型、Schema、规则、场景和生成实现的签名。身份变化拒绝混用 checkpoint；本次只调整调度逻辑的更新兼容紧邻上一版实现的签名，其余合同及 hash 必须一致。外部请求错误直接失败，已有 checkpoint 保留。
 
 单条样本校验重试耗尽或重复改写耗尽时，默认记录到 `generation_failures.json`，跳过该 ID 并继续剩余请求。全部请求处理后若仍有失败，只保留 checkpoint，不发布不满足完整配额的 `samples.jsonl`；CLI 返回退出码 2，表示本轮执行完毕但数据尚未齐全。再次执行原命令会重试全部缺失 ID，已成功样本不再调用模型。补齐后继续执行覆盖及多样性审计。`--fail-fast` 可恢复单条失败立即中断的行为；鉴权、网络等后端异常、checkpoint 损坏和文件写入失败仍直接中断。
+
+Chat 后端对 HTTP 502、503、504 在现有三次尝试预算内延迟重试，首次等待 1 秒、第二次等待 2 秒。重试保持原请求及 thinking 设置；第三次仍失败时保留服务端错误并中断，已有 checkpoint 可恢复。HTTP 鉴权错误不重试。生成校验重试和输出截断重试仍遵守各自既有规则；此次更新不保证中转服务恢复，也不改变远端网关的超时限制。
+
+明确更换生成后端时，可以提供与旧 checkpoint 签名完全匹配的完整 identity JSON：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.data.generate_search_raw --config configs/data/baking_search_v1_1.yaml --resume-backend-from-identity .tmp/baking-v1.1-verified-openrouter-identity.json --validate-resume
+```
+
+该命令不调用模型，但会在重新校验全部已有样本后更新恢复元数据。迁移仅允许后端身份变化，生成配置、意图计划、Registry、Eval 和校验合同必须保持一致；没有可信旧 identity 时拒绝迁移。元数据与最终 Manifest 保存前后后端、签名、原 checkpoint hash 和保留样本 ID；SFT Manifest 继承 Raw Manifest 的来源记录。随后使用原生成命令继续缺失样本，无需再次指定迁移参数。`.tmp/` 中的 identity 是本机恢复资料，不属于提交到仓库的通用文件。
 
 同一用户原话的空白归一化指纹用于保守去重及评估隔离，即使状态不同也拒绝复用该话术；近义改写仍需要人工复核。新生成样本遇到训练重复或评估重叠时，自动要求模型重写用户原话及对应 Gold，保持样本 ID、场景和目标字段；默认最多重写 3 次，可通过 `max_duplicate_retries` 设置（0 表示禁用）。日志显示重写原因及次数；超限时跳过该条，保留已通过校验的 checkpoint 并继续剩余任务。恢复时发现 checkpoint 本身重复仍直接失败，不自动改写已保存样本。并发任务数量限制在 `generation_concurrency` 内，提交前串行检查去重，避免同时返回的相同输入入库。已经存在的 `samples.jsonl` 不覆盖，修订数据必须使用新版本目录。一个输出目录同时只运行一个生成进程。
 
