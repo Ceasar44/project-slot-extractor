@@ -18,7 +18,7 @@ class Lineage:
     tool_versions: tuple[tuple[str, str], ...]
 
 
-def cache_key(lineage: Lineage, stage: str, parameters: Mapping[str, str]) -> str:
+def cache_key(lineage: Lineage, stage: str, parameters: Mapping[str, object]) -> str:
     payload = {
         "lineage": asdict(lineage),
         "stage": stage,

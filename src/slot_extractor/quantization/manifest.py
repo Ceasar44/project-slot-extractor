@@ -3,7 +3,7 @@
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
 
@@ -33,6 +33,7 @@ class StageManifest:
     outputs: tuple[ArtifactHash, ...]
     command: tuple[str, ...]
     error: str | None
+    parameters: dict[str, object] = field(default_factory=dict)
 
 
 def sha256_file(path: Path) -> str:
@@ -90,6 +91,7 @@ def read_and_verify_manifest(path: Path) -> StageManifest:
             outputs=tuple(ArtifactHash(**item) for item in payload["outputs"]),
             command=tuple(payload["command"]),
             error=payload.get("error"),
+            parameters=payload.get("parameters", {}),
         )
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
         raise ManifestError(f"invalid manifest: {path}") from exc

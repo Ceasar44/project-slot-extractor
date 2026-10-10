@@ -5,6 +5,10 @@ report_dir: reports/generated/baking-search-v1
 backends:
   baking-qwen3-0.6b: configs/inference/baking-qwen3-0.6b.yaml
   baking-qwen3-1.7b: configs/inference/baking-qwen3-1.7b.yaml
+  baking-qwen3-0.6b-fast: configs/inference/baking-qwen3-0.6b-fast.yaml
+  baking-qwen3-0.6b-no-imatrix: configs/inference/baking-qwen3-0.6b-no-imatrix.yaml
+  baking-qwen3-1.7b-fast: configs/inference/baking-qwen3-1.7b-fast.yaml
+  baking-qwen3-1.7b-no-imatrix: configs/inference/baking-qwen3-1.7b-no-imatrix.yaml
 scorers: [schema, assertions, patch]
 # Hard acceptance gates from the migration plan, not claimed baseline results.
 thresholds:

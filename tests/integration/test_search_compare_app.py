@@ -24,7 +24,7 @@ from slot_extractor.search_compare.app import create_app
 
 CONFIG = Path("configs/quantization/baking_search_v1.yaml")
 MODELS = ModelRegistry.from_config(CONFIG)
-LEFT, RIGHT = [s.model_id for s in MODELS.quantization_targets()]
+LEFT, RIGHT = [s.model_id for s in MODELS.quantization_targets()[:2]]
 PATCH = SearchPatch(
     hard_filters=(HardFilter("price", "lte", value=20, unit="USD"),),
     soft_preferences=(SoftPreference("flavor", "prefer", values=("pistachio",)),),
@@ -173,7 +173,7 @@ def test_invalid_requests_fail_before_loading_or_inference(tmp_path, changes, co
 def test_missing_artifacts_are_visible_but_cannot_load(tmp_path):
     with TestClient(create_app(log_path=tmp_path / "log")) as api:
         listed = api.get("/api/models").json()
-        assert len(listed) == 4 and all(not m["available"] for m in listed)
+        assert len(listed) == len(MODELS.models) and all(not m["available"] for m in listed)
         assert all(m["unavailable_reason"] for m in listed)
         assert api.post("/api/model-slots/left/load", json={"model_id": LEFT}).status_code == 409
         assert (

@@ -5,6 +5,27 @@ context_size: 8192
 work_root: models/quantization/baking-search-v1
 # Prepare from reviewed SFT train only; never use Frozen Eval or validation data.
 calibration_data: data/calibration/baking-search-v1.txt
+# Full calibration remains the default; experimental targets override these options.
+stage_reuse: true
+imatrix:
+  enabled: true
+  context_size: 8192
+  batch_size: 128
+  max_chunks: null
+  no_ppl: false
+model_options:
+  baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast: &fast_options
+    experimental: true
+    require_calibration_manifest: true
+    calibration_data: data/calibration/baking-search-v1-fast.txt
+    imatrix: {context_size: 2048, max_chunks: 50, no_ppl: true}
+  baking-search-qwen3-1.7b-sft-v1-q4-k-m-fast:
+    <<: *fast_options
+    calibration_data: data/calibration/baking-search-v1-fast-1.7b.txt
+  baking-search-qwen3-0.6b-sft-v1-q4-k-m-no-imatrix: &no_imatrix_options
+    experimental: true
+    imatrix: {enabled: false}
+  baking-search-qwen3-1.7b-sft-v1-q4-k-m-no-imatrix: *no_imatrix_options
 toolchain:
   resolve: huggingface-cli
   merge: llamafactory-cli
@@ -57,3 +78,27 @@ models:
     manifest_path: models/merged/baking-search-qwen3-1.7b-sft-v1-f16/manifest.json
     is_anchor: true
     server_args: [--ctx-size, '12288', --parallel, '1', --alias, baking-search-qwen3-1.7b-sft-v1-f16]
+  - <<: *sft06
+    model_id: baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast
+    variant: sft-v1-fast
+    artifact_path: models/gguf/baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast.gguf
+    manifest_path: models/quantization/baking-search-v1/baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast/manifest.json
+    server_args: [--ctx-size, '12288', --parallel, '1', --alias, baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast]
+  - <<: *sft06
+    model_id: baking-search-qwen3-0.6b-sft-v1-q4-k-m-no-imatrix
+    variant: sft-v1-no-imatrix
+    artifact_path: models/gguf/baking-search-qwen3-0.6b-sft-v1-q4-k-m-no-imatrix.gguf
+    manifest_path: models/quantization/baking-search-v1/baking-search-qwen3-0.6b-sft-v1-q4-k-m-no-imatrix/manifest.json
+    server_args: [--ctx-size, '12288', --parallel, '1', --alias, baking-search-qwen3-0.6b-sft-v1-q4-k-m-no-imatrix]
+  - <<: *sft17
+    model_id: baking-search-qwen3-1.7b-sft-v1-q4-k-m-fast
+    variant: sft-v1-fast
+    artifact_path: models/gguf/baking-search-qwen3-1.7b-sft-v1-q4-k-m-fast.gguf
+    manifest_path: models/quantization/baking-search-v1/baking-search-qwen3-1.7b-sft-v1-q4-k-m-fast/manifest.json
+    server_args: [--ctx-size, '12288', --parallel, '1', --alias, baking-search-qwen3-1.7b-sft-v1-q4-k-m-fast]
+  - <<: *sft17
+    model_id: baking-search-qwen3-1.7b-sft-v1-q4-k-m-no-imatrix
+    variant: sft-v1-no-imatrix
+    artifact_path: models/gguf/baking-search-qwen3-1.7b-sft-v1-q4-k-m-no-imatrix.gguf
+    manifest_path: models/quantization/baking-search-v1/baking-search-qwen3-1.7b-sft-v1-q4-k-m-no-imatrix/manifest.json
+    server_args: [--ctx-size, '12288', --parallel, '1', --alias, baking-search-qwen3-1.7b-sft-v1-q4-k-m-no-imatrix]

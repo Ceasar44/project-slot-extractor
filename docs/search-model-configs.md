@@ -1,5 +1,8 @@
 # 烘焙搜索模型配置
 
+快速校准、无校准实验、Linux 路径和按阶段复用见
+[快速量化与阶段复用](search-quantization-fast.md)。完整模式的默认参数保持不变。
+
 Task 11 为 Qwen3 0.6B 和 1.7B 接通搜索 SFT、推理、评估与量化配置。数据采用 Task 07 的 baking-v1.0，Prompt 和指标复用 Task 04/08。配置可离线加载；正式训练、量化与模型验收需要先提供审核后的数据和运行环境。
 
 ## 配置与标识
@@ -43,7 +46,7 @@ llamafactory-cli train configs/training/llamafactory/_rendered/baking-qwen3-1.7b
 
 ## 量化与本地推理
 
-新 ModelRegistry 使用 baking_search profile，包含两个 Q4_K_M 目标及两个匹配 SFT F16 anchor。显式 adapter_path 与训练输出一致，模型产物和 Manifest 使用新的搜索名称。推理后端沿用 llama_server，请求关闭 thinking。
+ModelRegistry 使用 baking_search profile，包含两个完整 Q4_K_M 目标、四个快速/无校准实验目标及两个匹配 SFT F16 anchor。默认构建只选择完整目标，实验目标需显式指定 model ID。显式 adapter_path 与训练输出一致。推理后端沿用 llama_server，请求关闭 thinking。
 
 实际构建入口 build_phase05_real 已支持 --config，使用配置的 adapter_path、校准数据、工具路径、线程数和 imatrix context。转换器使用当前 Python；匹配 anchor 按 base_model 和 adapter_run_id 查找。其默认配置仍保留历史行为。
 
@@ -54,7 +57,7 @@ python -m scripts.quantize.build_search
 
 dry-run 仅显示目标及路径可用性，不意味着依赖齐全。正式构建需训练 adapter、本地完整 Qwen 权重、Transformers/PEFT/Torch 和 llama.cpp 转换/量化工具。校准文件 data/calibration/baking-search-v1.txt 应从审核后的 SFT train 的真实 Prompt 与 Gold 序列制备，不能用 val 或 Frozen Eval。当前尚未制备该文件；正式命令缺少输入时会失败。
 
-实际 Manifest 记录校准与 adapter 文件 SHA256、模型来源及 GGUF SHA256。搜索版本拒绝复用已有 merged、imatrix、GGUF 和 Manifest，以免旧缓存被标记为新输入产物；中途失败需检查并显式处理未完成产物，或使用新的模型版本。GGUF 的 hash 验证不代表模型质量验收，仍要启动服务器并运行 Frozen Eval。
+实际 Manifest 记录校准参数、基座、adapter、工具及 GGUF 来源 hash。搜索版本按阶段核验完成记录、输入/参数指纹和输出 hash 后复用；没有新阶段完成记录的旧产物拒绝自动复用。中断时保存的 imatrix 不视为完成，重跑会复用已核验的上游并重做失败阶段。F16 Manifest 在转换成功后立即写入。GGUF 的 hash 验证不代表模型质量验收，仍要启动服务器并运行 Frozen Eval。
 
 旧 run_phase05 是抽象流水线入口，其 stage 命令协议并非直接调用原生 llama.cpp 参数；本业务真实构建使用上面的 build_phase05_real，不改写历史流水线。
 

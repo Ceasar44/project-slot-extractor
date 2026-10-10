@@ -1,0 +1,7 @@
+backend: llama_server
+model: baking-search-qwen3-0.6b-sft-v1-q4-k-m-fast
+base_url: http://127.0.0.1:8080/v1
+api_key: local-no-key
+temperature: 0.0
+max_tokens: 2048
+timeout_s: 180

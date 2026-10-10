@@ -30,9 +30,9 @@ EVALUATION = Path("configs/evaluation/baking_search_v1.yaml")
 def test_training_inference_quantization_identity_and_paths(size, tmp_path):
     run_id = f"baking-qwen3-{size}b"
     config = load_yaml(render_run(run_id, output_root=tmp_path))
-    assert config["dataset"] == "baking_v1_0_train"
-    assert config["eval_dataset"] == "baking_v1_0_val"
-    assert config["dataset_dir"] == "data/processed/baking-v1.0"
+    assert config["dataset"] == "baking_v1_1_train"
+    assert config["eval_dataset"] == "baking_v1_1_val"
+    assert config["dataset_dir"] == "data/processed/baking-v1.1"
     assert config["enable_thinking"] is False and config["cutoff_len"] == 8192
     backend = build_backend_from_config(f"configs/inference/{run_id}.yaml")
     models = ModelRegistry.from_config(QUANTIZATION)
@@ -49,10 +49,10 @@ def test_training_inference_quantization_identity_and_paths(size, tmp_path):
 
 def test_search_matrix_and_frozen_eval_are_independent_of_appointment():
     models = ModelRegistry.from_config(QUANTIZATION)
-    assert len(models.quantization_targets()) == 2 and len(models.anchors()) == 2
+    assert len(models.quantization_targets()) == 6 and len(models.anchors()) == 2
     evaluation = load_evaluation_config(EVALUATION)
     assert evaluation["cases"] == "data/eval/baking-v1.0/test.jsonl"
-    assert len(evaluation["backends"]) == 2
+    assert len(evaluation["backends"]) == 6
     assert evaluation["thresholds"]["allergen_semantics"] == 1
 
 
@@ -227,6 +227,8 @@ def test_search_server_alias_is_checked_during_readiness(tmp_path, monkeypatch):
 
 def test_real_search_build_routes_adapter_and_writes_source_hashes(tmp_path, monkeypatch):
     payload = load_yaml(QUANTIZATION)
+    # Exercise the legacy builder independently of the new search stage runner.
+    payload["stage_reuse"] = False
     original = ModelRegistry.from_config(QUANTIZATION)
     target, anchor = original.quantization_targets()[0], original.anchors()[0]
     adapter = tmp_path / "adapter"

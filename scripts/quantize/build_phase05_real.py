@@ -41,6 +41,11 @@ def run(command: list[str], log: Path) -> None:
 
 
 def cached_base(spec: ModelSpec) -> Path:
+    local = Path(spec.base_model)
+    if local.is_dir():
+        if not local.joinpath("config.json").is_file() or not list(local.glob("*.safetensors")):
+            raise FileNotFoundError(f"incomplete local base: {local}")
+        return local
     from huggingface_hub import snapshot_download
 
     try:
@@ -108,54 +113,69 @@ def build_imatrix(
     calibration: Path = Path("data/calibration/phase05-v1.txt"),
     threads: int = 8,
     context_size: int = 512,
+    *,
+    batch_size: int = 128,
+    max_chunks: int | None = None,
+    no_ppl: bool = False,
 ) -> None:
     if output.is_file() and output.stat().st_size:
         return
     output.parent.mkdir(parents=True, exist_ok=True)
-    run(
-        [
-            str(tools.imatrix),
-            "-m",
-            str(f16),
-            "-f",
-            str(calibration),
-            "-o",
-            str(output),
-            "-t",
-            str(threads),
-            "-c",
-            str(context_size),
-            "-b",
-            "128",
-        ],
-        log,
-    )
+    command = [
+        str(tools.imatrix),
+        "-m",
+        str(f16),
+        "-f",
+        str(calibration),
+        "-o",
+        str(output),
+        "-t",
+        str(threads),
+        "-c",
+        str(context_size),
+        "-b",
+        str(batch_size),
+        "--parse-special",
+    ]
+    if max_chunks is not None:
+        command.extend(["--chunks", str(max_chunks)])
+    if no_ppl:
+        command.append("--no-ppl")
+    run(command, log)
 
 
 def quantize(
-    f16: Path, imatrix: Path, output: Path, tools: Tools, log: Path, threads: int = 8
+    f16: Path, imatrix: Path | None, output: Path, tools: Tools, log: Path, threads: int = 8
 ) -> None:
     if output.is_file() and output.stat().st_size:
         return
     output.parent.mkdir(parents=True, exist_ok=True)
-    run(
+    command = [str(tools.quantize)]
+    if imatrix is not None:
+        command.extend(["--imatrix", str(imatrix)])
+    command.extend(
         [
-            str(tools.quantize),
-            "--imatrix",
-            str(imatrix),
             str(f16),
             str(output),
             "Q4_K_M",
             str(threads),
-        ],
-        log,
+        ]
     )
+    run(command, log)
 
 
 def manifest_for(
-    spec: ModelSpec, output: Path, command: tuple[str, ...], calibration: Path | None = None
+    spec: ModelSpec,
+    output: Path,
+    command: tuple[str, ...],
+    calibration: Path | None = None,
+    *,
+    project_revision: str | None = None,
+    tool_versions=None,
+    extra_sources=(),
+    parameters=None,
 ) -> StageManifest:
-    sources = []
+    sources = list(extra_sources)
     if calibration is not None:
         sources.append(("calibration", sha256_file(calibration)))
     if spec.adapter_path is not None:
@@ -170,8 +190,9 @@ def manifest_for(
         spec.parent_model_id,
         spec.adapter_run_id,
         tuple(sources),
-        subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-        (("llama.cpp", "local-release"),),
+        project_revision
+        or subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        tool_versions or (("llama.cpp", "local-release"),),
     )
     return StageManifest(
         spec.model_id,
@@ -179,12 +200,13 @@ def manifest_for(
         "complete",
         spec.artifact_kind,
         spec.is_anchor,
-        cache_key(lineage, "real-build", {"type": spec.artifact_kind}),
+        cache_key(lineage, "real-build", parameters or {"type": spec.artifact_kind}),
         lineage,
         (),
         (ArtifactHash(str(output), sha256_file(output)),),
         command,
         None,
+        parameters or {},
     )
 
 
@@ -198,6 +220,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     registry = ModelRegistry.from_config(args.config)
     payload = yaml.safe_load(args.config.read_text(encoding="utf-8"))
+    if registry.profile == "baking_search" and payload.get("stage_reuse", True):
+        from scripts.quantize.search_build import build_search
+
+        return build_search(args, registry, payload)
     calibration = Path(payload["calibration_data"])
     work_root = Path(payload["work_root"])
     threads = int(payload.get("threads", 8))
